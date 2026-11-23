@@ -1,0 +1,14 @@
+# android-base.config options this kernel cannot or should not meet (kconfig.py check skips them).
+# Only in the Android Common Kernel, not upstream Linux:
+CONFIG_ASHMEM
+CONFIG_CPU_FREQ_TIMES
+CONFIG_DM_DEFAULT_KEY
+CONFIG_UID_SYS_STATS
+CONFIG_NETFILTER_XT_MATCH_QUOTA2
+CONFIG_NETFILTER_XT_MATCH_QUOTA2_LOG
+# Removed upstream (DCCP in 6.16, UDP-Lite conntrack, SCHED_DEBUG folded into the scheduler):
+CONFIG_NF_CT_PROTO_DCCP
+CONFIG_NF_CT_PROTO_UDPLITE
+CONFIG_SCHED_DEBUG
+# Selected by nouveau (kept for NVIDIA GPUs); only caches firmware across suspend:
+CONFIG_FW_CACHE
