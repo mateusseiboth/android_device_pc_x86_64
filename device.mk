@@ -23,6 +23,6 @@ PRODUCT_SOURCE_ROOT_DIRS += \
     -hardware/ti \
     -kernel/pc \
     -platform_testing/tools/automotive \
-    -system/software_defined_vehicle \
+    -system/software_defined_vehicle/samples \
     -vendor/codeaurora \
     -vendor/qcom
