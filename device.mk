@@ -9,7 +9,6 @@ PRODUCT_SOURCE_ROOT_DIRS += \
     -device/google_car \
     -device/qcom \
     -device/sample \
-    -device/generic/car \
     -hardware/broadcom \
     -hardware/knowles \
     -hardware/nxp \
@@ -23,6 +22,5 @@ PRODUCT_SOURCE_ROOT_DIRS += \
     -hardware/ti \
     -kernel/pc \
     -platform_testing/tools/automotive \
-    -system/software_defined_vehicle/samples \
     -vendor/codeaurora \
     -vendor/qcom
