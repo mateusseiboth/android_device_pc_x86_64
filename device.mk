@@ -22,5 +22,7 @@ PRODUCT_SOURCE_ROOT_DIRS += \
     -hardware/telink \
     -hardware/ti \
     -kernel/pc \
+    -platform_testing/tools/automotive \
+    -system/software_defined_vehicle \
     -vendor/codeaurora \
     -vendor/qcom
