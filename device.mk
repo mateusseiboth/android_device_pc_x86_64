@@ -5,7 +5,6 @@ PRODUCT_USE_DYNAMIC_PARTITION_SIZE := true
 # Soong analysis reads every Android.bp in the tree; skipping other platforms' trees keeps it within
 # a 32 GB machine. Nothing a PC build needs lives here.
 PRODUCT_SOURCE_ROOT_DIRS += \
-    -device/google \
     -device/google_car \
     -device/qcom \
     -device/sample \
@@ -19,6 +18,5 @@ PRODUCT_SOURCE_ROOT_DIRS += \
     -hardware/telink \
     -hardware/ti \
     -kernel/pc \
-    -platform_testing/tools/automotive \
     -vendor/codeaurora \
     -vendor/qcom
