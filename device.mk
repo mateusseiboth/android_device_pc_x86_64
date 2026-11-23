@@ -7,7 +7,6 @@ PRODUCT_USE_DYNAMIC_PARTITION_SIZE := true
 PRODUCT_SOURCE_ROOT_DIRS += \
     -device/google_car \
     -device/qcom \
-    -device/sample \
     -hardware/broadcom \
     -hardware/knowles \
     -hardware/nxp \
