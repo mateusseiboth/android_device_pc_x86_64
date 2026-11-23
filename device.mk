@@ -15,7 +15,6 @@ PRODUCT_SOURCE_ROOT_DIRS += \
     -hardware/qcom \
     -hardware/qcom-caf \
     -hardware/samsung \
-    -hardware/sdv \
     -hardware/st \
     -hardware/synaptics \
     -hardware/telink \
