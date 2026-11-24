@@ -10,8 +10,9 @@ OUT=${KERNEL_OUT:-$TOP/out/kernel-pc}
 CLANG=${KERNEL_CLANG:-$TOP/prebuilts/clang/host/linux-x86/clang-r596125/bin}
 REQUIRED=${KERNEL_ANDROID_BASE:-$TOP/kernel/configs/b/android-6.12/android-base.config}
 JOBS=${KERNEL_JOBS:-$(nproc)}
-# Who built it, as /proc/version and Settings > About show it: the builder's git name, on "lineage-pc".
-export KBUILD_BUILD_USER=${KBUILD_BUILD_USER:-$(git config user.name || id -un)}
+# Who built it, as /proc/version and Settings > About show it: the builder's git name as a user name
+# (no spaces, lower case), on "lineage-pc".
+export KBUILD_BUILD_USER=${KBUILD_BUILD_USER:-$( (git config user.name || id -un) | tr -d ' ' | tr '[:upper:]' '[:lower:]')}
 export KBUILD_BUILD_HOST=${KBUILD_BUILD_HOST:-lineage-pc}
 MAKE=(make -C "$SRC" O="$OUT" LLVM=1 PATH="$CLANG:$PATH")
 
