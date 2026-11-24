@@ -16,6 +16,8 @@ TARGET_COPY_OUT_VENDOR := system/vendor
 TARGET_COPY_OUT_PRODUCT := system/product
 TARGET_COPY_OUT_SYSTEM_EXT := system/system_ext
 TARGET_USERIMAGES_USE_EXT4 := true
+# pc-init loop-mounts system.img as is, so it must be raw ext4, not Android's sparse format.
+TARGET_USERIMAGES_SPARSE_EXT_DISABLED := true
 BOARD_SYSTEMIMAGE_FILE_SYSTEM_TYPE := ext4
 BOARD_USERDATAIMAGE_PARTITION_SIZE := 4294967296
 BOARD_FLASH_BLOCK_SIZE := 512
@@ -38,6 +40,7 @@ BOARD_MESA3D_MESON_ARGS := \
     -Dallow-kcmp=enabled
 
 BOARD_VENDOR_SEPOLICY_DIRS += device/pc/pc_x86_64/sepolicy/vendor
+SYSTEM_EXT_PRIVATE_SEPOLICY_DIRS += packages/apps/PcInstaller/installd/sepolicy/private
 
 # Kernel modules from kernel/build_kernel.sh (KERNEL_OUT, default out/kernel-pc), installed in
 # /vendor/lib/modules with modules.dep/alias so ueventd loads every driver on demand.

@@ -46,11 +46,14 @@ class PcInitTest(unittest.TestCase):
 
 class CmdlineTest(PcInitTest):
     def test_defaults(self):
-        self.assertEqual(self.parse("quiet"), {"src": "lineage", "live": "0", "previous": "0"})
+        self.assertEqual(self.parse("quiet"), {"src": "lineage", "live": "0", "previous": "0", "id": ""})
 
     def test_reads_the_install_folder_live_mode_and_previous_system(self):
         self.assertEqual(self.parse("BOOT_IMAGE=/x pc.src=android/lineage pc.live=1 pc.previous=1 quiet"),
-                         {"src": "android/lineage", "live": "1", "previous": "1"})
+                         {"src": "android/lineage", "live": "1", "previous": "1", "id": ""})
+
+    def test_reads_the_install_id(self):
+        self.assertEqual(self.parse("pc.id=0011aabb pc.src=lineage")["id"], "0011aabb")
 
 
 class PlanTest(PcInitTest):
@@ -84,6 +87,18 @@ class PlanTest(PcInitTest):
     def test_custom_folder(self):
         root = self.install("os/android/system.img")
         self.assertEqual(self.plan(root, "pc.src=os/android")["system"], "os/android/system.img")
+
+    # With pc.id= the folder must hold install-<id>.id: an installed system and the live ISO both use
+    # the folder name "lineage", and each must find its own copy when the other's disk is attached.
+    def test_the_install_id_picks_the_right_folder(self):
+        root = self.install("lineage/system.img", "lineage/install-0011aabb.id")
+        self.assertEqual(self.plan(root, "pc.id=0011aabb")["system"], "lineage/system.img")
+        self.assertIsNone(self.plan(root, "pc.id=ffff0000"))
+        self.assertIsNone(self.plan(root, "pc.id=live pc.live=1"))
+
+    def test_without_an_id_any_folder_will_do(self):
+        root = self.install("lineage/system.img", "lineage/install-0011aabb.id")
+        self.assertEqual(self.plan(root)["system"], "lineage/system.img")
 
     def test_a_partition_without_the_folder_is_not_the_install(self):
         self.assertIsNone(self.plan(self.install("other/system.img")))
