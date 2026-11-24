@@ -3,8 +3,8 @@ import unittest
 import tempfile
 from pathlib import Path
 
-from build_iso import (BOOT_ENTRIES, INSTALL_GRUB_PREFIX, LIVE_ID, grub_cfg, grub_mkimage_args, is_android_sparse,
-                       kernel_cmdline, live_id_file)
+from build_iso import (BIOS_GRUB_PREFIX, BOOT_ENTRIES, INSTALL_GRUB_PREFIX, LIVE_ID, bios_early_cfg, grub_cfg,
+                       grub_bios_mkimage_args, grub_mkimage_args, is_android_sparse, kernel_cmdline, live_id_file)
 
 
 class KernelCmdlineTest(unittest.TestCase):
@@ -53,6 +53,30 @@ class InstallGrubTest(unittest.TestCase):
         args = grub_mkimage_args(Path("grubx64.efi"))
         for module in ("part_gpt", "part_msdos", "fat", "ext2", "f2fs", "btrfs", "ntfs", "exfat", "search",
                        "normal", "linux", "configfile", "all_video"):
+            self.assertIn(module, args)
+
+
+    def test_starts_other_systems_and_the_firmware_settings(self):
+        args = grub_mkimage_args(Path("grubx64.efi"))
+        self.assertIn("chain", args)
+        self.assertIn("efifwsetup", args)
+
+
+class BiosGrubTest(unittest.TestCase):
+    # For BIOS the installer writes boot.img and core.img to the disk; core.img finds the menu directory
+    # pc-installd keeps in /pc-grub and loads the rest of GRUB's modules from there.
+    def test_core_image_finds_the_menu_directory(self):
+        cfg = bios_early_cfg()
+        self.assertIn("search --no-floppy --set=root --file /pc-grub/grub.cfg", cfg)
+        self.assertIn("set prefix=($root)/pc-grub", cfg)
+        self.assertEqual(BIOS_GRUB_PREFIX, "/pc-grub")
+
+    def test_core_image_reads_every_file_system_from_a_bios_disk(self):
+        args = grub_bios_mkimage_args(Path("core.img"), Path("early.cfg"))
+        self.assertEqual(args[args.index("-O") + 1], "i386-pc")
+        self.assertEqual(args[args.index("-c") + 1], "early.cfg")
+        for module in ("biosdisk", "part_msdos", "part_gpt", "fat", "exfat", "ntfs", "ext2", "f2fs", "btrfs", "search",
+                       "search_fs_file"):
             self.assertIn(module, args)
 
 

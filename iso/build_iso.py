@@ -4,8 +4,9 @@
   build_iso.py OUT.iso [--kernel BZIMAGE] [--system SYSTEM_IMG]
 
 The ISO holds the install folder /lineage (kernel, initrd.img with pc-init, system.img, install-live.id,
-and grubx64.efi: the GRUB the installer puts on the ESP) and a GRUB menu that boots it live: user data
-stays in RAM (pc.live=1). Defaults come from the Lineage tree:
+grubx64.efi: the GRUB the installer puts on the ESP, and grub-pc/: boot.img, core.img and the i386-pc
+modules it writes to a BIOS disk) and a GRUB menu that boots it live: user data stays in RAM (pc.live=1).
+Defaults come from the Lineage tree:
 out/kernel-pc (kernel/build_kernel.sh) and out/target/product/pc_x86_64/system.img.
 """
 import argparse
@@ -27,7 +28,16 @@ INSTALL_GRUB_PREFIX = '/EFI/LineageOS'
 INSTALL_GRUB_MODULES = ('part_gpt', 'part_msdos', 'fat', 'ext2', 'f2fs', 'btrfs', 'ntfs', 'exfat', 'iso9660',
                         'search', 'search_fs_file', 'search_fs_uuid', 'normal', 'linux', 'configfile', 'echo',
                         'test', 'all_video', 'efi_gop', 'gfxterm', 'font', 'gzio', 'xzio', 'zstd', 'reboot',
-                        'halt')
+                        'halt', 'chain', 'efifwsetup')
+
+# The installed system's GRUB for BIOS: pc-installd writes boot.img to sector 0 and core.img before the
+# first partition. core.img only finds /pc-grub/grub.cfg (the menu pc-installd keeps) and loads every other
+# module from /pc-grub/i386-pc, so it stays small enough for the usual 1 MiB gap.
+BIOS_GRUB_DIR = 'grub-pc'
+BIOS_GRUB_PREFIX = '/pc-grub'
+BIOS_GRUB_LIB = Path('/usr/lib/grub/i386-pc')
+BIOS_CORE_MODULES = ('biosdisk', 'part_msdos', 'part_gpt', 'fat', 'exfat', 'ntfs', 'ext2', 'f2fs', 'btrfs', 'search',
+                     'search_fs_file')
 SPARSE_MAGIC = bytes.fromhex('3aff26ed')
 
 # Arguments every boot needs; androidboot.selinux=permissive until the vendor policy is complete.
@@ -65,6 +75,27 @@ def live_id_file(folder):
 
 def grub_mkimage_args(out):
     return ['grub2-mkimage', '-O', 'x86_64-efi', '-p', INSTALL_GRUB_PREFIX, '-o', str(out), *INSTALL_GRUB_MODULES]
+
+
+def bios_early_cfg():
+    return (f'search --no-floppy --set=root --file {BIOS_GRUB_PREFIX}/grub.cfg\n'
+            f'set prefix=($root){BIOS_GRUB_PREFIX}\n')
+
+
+def grub_bios_mkimage_args(out, early_cfg):
+    return ['grub2-mkimage', '-O', 'i386-pc', '-p', BIOS_GRUB_PREFIX, '-c', str(early_cfg), '-o', str(out),
+            *BIOS_CORE_MODULES]
+
+
+def build_bios_grub(out_dir, work):
+    """grub-pc/: core.img, boot.img and the modules core.img loads from /pc-grub/i386-pc."""
+    early = work / 'bios-early.cfg'
+    early.write_text(bios_early_cfg())
+    (out_dir / 'i386-pc').mkdir(parents=True)
+    subprocess.run(grub_bios_mkimage_args(out_dir / 'core.img', early), check=True)
+    shutil.copy(BIOS_GRUB_LIB / 'boot.img', out_dir / 'boot.img')
+    for module in [*BIOS_GRUB_LIB.glob('*.mod'), *BIOS_GRUB_LIB.glob('*.lst')]:
+        shutil.copy(module, out_dir / 'i386-pc')
 
 
 def is_android_sparse(image):
@@ -107,6 +138,7 @@ def main():
         os.link(a.system, tree / FOLDER / 'system.img')
         (tree / live_id_file(FOLDER)).write_text(LIVE_ID + '\n')
         subprocess.run(grub_mkimage_args(tree / FOLDER / 'grubx64.efi'), check=True)
+        build_bios_grub(tree / FOLDER / BIOS_GRUB_DIR, work)
         (tree / 'boot/grub/grub.cfg').write_text(grub_cfg(FOLDER))
         subprocess.run(['grub2-mkrescue', '-o', str(a.out), str(tree), '--', '-volid', 'LINEAGE_PC'],
                        check=True, capture_output=True)
