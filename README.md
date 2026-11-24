@@ -14,6 +14,7 @@ an existing partition and booted through GRUB, in the spirit of Android-x86 and 
 | HALs | AOSP software HALs, AIDL audio over ALSA, Wi-Fi (nl80211), Bluetooth, USB cameras — not yet booted |
 | Installer | `PcInstaller` app + `pc-installd` root service ([packages/apps/PcInstaller](https://github.com/mateusseiboth/android_packages_apps_PcInstaller)), UEFI only; not yet booted |
 | Desktop UI | [vendor/pc/ui](https://github.com/mateusseiboth/android_vendor_pc_ui) + `pc` branches of frameworks/base and Launcher3 — not yet built |
+| Linux terminal | AVF (`com.android.virt`, crosvm, Terminal app) on KVM, non-protected VMs — not yet built |
 
 ## Sources
 
@@ -77,6 +78,36 @@ live ISO uses `pc.id=live`, so a USB stick and an installed system never boot ea
 `firmware_class.path=/vendor/firmware`. The system image or folder must live on a Linux file system
 (ext4, f2fs, btrfs) when extracted; on NTFS/exFAT use `system.img` and `data.img`.
 
+## Linux terminal
+
+The Terminal app runs a Debian VM through the Android Virtualization Framework, as on Googlebook. A PC has
+no pKVM, so only non-protected VMs run, on the kernel's KVM.
+
+- `device.mk` inherits `packages/modules/Virtualization/build/apex/product_packages.mk`: it sets
+  `PRODUCT_AVF_ENABLED` (the `com.android.virt` APEX with crosvm, virtmgr and, through the release flag
+  `RELEASE_AVF_SUPPORT_CUSTOM_VM_WITH_PARAVIRTUALIZED_DEVICES`, `VmTerminalApp`) and installs the
+  `android.software.virtualization_framework` feature. Remote attestation is off
+  (`PRODUCT_AVF_REMOTE_ATTESTATION_DISABLED`): it needs protected VMs.
+- The kernel has KVM (Intel and AMD), vhost-vsock, AF_VSOCK, TUN and the bridge built in (`kernel/pc.config`).
+- `terminal/pc-hypervisor.sh` runs at `post-fs`: when the kernel registered the kvm device (VT-x/AMD-V
+  enabled in the firmware) it sets `vendor.pc.kvm`, and `init.pc.rc` then sets
+  `ro.boot.hypervisor.vm.supported` and `hypervisor.memory_reclaim.supported` (memory balloon).
+  `ro.boot.hypervisor.protected_vm.supported` is always false. A value given on the kernel command line
+  (`androidboot.hypervisor.vm.supported=0`) wins.
+- `terminal/pc-terminal-default-permissions.xml` grants the terminal local network access and
+  notifications up front.
+- Turn it on in Settings > System > Developer options > Linux development environment. Settings offers it
+  only with VMs supported, at least 4 GB of RAM and 16 GB of storage.
+- On first start the app downloads the Debian image (`images.tar.gz`) from Google's servers
+  (`https://dl.google.com/android/ferrochrome/<version>/x86_64/`). On a userdebug build a local
+  `/sdcard/linux/images.tar.gz` is used instead; `packages/modules/Virtualization/build/debian/build.sh`
+  builds one.
+
+SELinux is permissive. For enforcing, besides the rest of the vendor policy: crosvm and virtmgr are
+private platform domains that vendor policy cannot name, so anything they need beyond AOSP's rules (for
+example the GPU render node when a VM uses a GPU backend other than `2d`) goes into system_ext private
+policy (`SYSTEM_EXT_PRIVATE_SEPOLICY_DIRS`).
+
 ## Tree
 
 | Path | What |
@@ -87,10 +118,11 @@ live ISO uses `pc.id=live`, so a USB stick and an installed system never boot ea
 | `vulkan/` | `vulkan.pc`: picks the Mesa Vulkan driver from the GPU's DRM driver |
 | `gbm_mesa_wrapper/` | builds minigbm's wrapper around Mesa's GBM |
 | `rootdir/` | `init.pc.rc`, `ueventd.rc` |
+| `terminal/` | Linux terminal: KVM detection (`pc-hypervisor.sh`) and default permissions |
 | `audio/`, `wifi/`, `camera/` | HAL configuration |
 | `sepolicy/` | vendor policy (SELinux is permissive while it is completed) |
 
-Tests: `python3 -m unittest` in `kernel/`, `initrd/`, `iso/` and `vulkan/`.
+Tests: `python3 -m unittest` in `kernel/`, `initrd/`, `iso/`, `vulkan/` and `terminal/`.
 
 ## Credits
 
@@ -101,6 +133,7 @@ Tests: `python3 -m unittest` in `kernel/`, `initrd/`, `iso/` and `vulkan/`.
   - The [minigbm](https://github.com/mateusseiboth/android_external_minigbm) and [aospext](https://github.com/mateusseiboth/android_glodroid_aospext) forks come from android-generic.
 - [Android-x86](https://www.android-x86.org): the original Android-on-PC work, including installing into a folder and booting through GRUB.
 - [GloDroid](https://github.com/GloDroid): aospext (Mesa built inside the Android build) and minigbm's gbm_mesa backend.
+- The [Android Virtualization Framework](https://source.android.com/docs/core/virtualization) and [crosvm](https://crosvm.dev): the Linux terminal and its VM.
 - AOSP Cuttlefish: `audio/primary_audio_policy_configuration.xml` comes from [device/google/cuttlefish](https://android.googlesource.com/device/google/cuttlefish).
 - [Mesa](https://mesa3d.org), [minigbm](https://chromium.googlesource.com/chromiumos/platform/minigbm) (ChromiumOS), [drm_hwcomposer](https://gitlab.freedesktop.org/drm/hwcomposer), [linux-firmware](https://gitlab.com/kernel-firmware/linux-firmware), the [Linux kernel](https://kernel.org) and [Fedora](https://fedoraproject.org)'s kernel configuration, used as the base of `kernel/fedora-7.2.config`.
 

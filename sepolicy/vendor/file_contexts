@@ -12,3 +12,6 @@
 /(vendor|system/vendor)/lib(64)?/hw/vulkan\..*\.so u:object_r:same_process_hal_file:s0
 /(vendor|system/vendor)/lib(64)?/libdrm.*\.so u:object_r:same_process_hal_file:s0
 /(vendor|system/vendor)/lib(64)?/libgbm_mesa_wrapper\.so u:object_r:same_process_hal_file:s0
+
+# Linux terminal: KVM detection (init.pc.rc).
+/(vendor|system/vendor)/bin/pc-hypervisor\.sh u:object_r:pc_hypervisor_exec:s0

@@ -1,0 +1,13 @@
+// Linux terminal (AVF): KVM detection for init.pc.rc and the terminal's default runtime permissions.
+sh_binary {
+    name: "pc-hypervisor.sh",
+    src: "pc-hypervisor.sh",
+    vendor: true,
+}
+
+prebuilt_etc {
+    name: "pc-terminal-default-permissions.xml",
+    src: "pc-terminal-default-permissions.xml",
+    sub_dir: "default-permissions",
+    vendor: true,
+}
