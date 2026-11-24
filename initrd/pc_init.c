@@ -11,12 +11,16 @@
  *   pc.src=DIR      install folder, relative to the partition root (default: lineage)
  *   pc.live=1       keep user data in RAM (the live ISO)
  *   pc.previous=1   boot the system kept from before the last update (system.old.img / system.old/)
+ *   iso-scan/filename=PATH  the live ISO is this file on some partition (multiboot sticks); without it,
+ *                   pc-init also looks for our ISO (volume label LINEAGE_PC) at the root and one
+ *                   folder down of every partition, as Ventoy keeps them
  *   pc.id=ID        only accept a folder holding install-ID.id (written by the installer; the live ISO
  *                   uses pc.id=live), so an installed system and the live USB stick never get mixed up
  *
  * Host test modes:
  *   pc-init --cmdline CMDLINE   print the parsed options
  *   pc-init --plan ROOT CMDLINE print what would be mounted from a partition mounted at ROOT
+ *   pc-init --isos ROOT CMDLINE print our ISO files found on a partition mounted at ROOT
  */
 #define _GNU_SOURCE
 #include <dirent.h>
@@ -35,6 +39,7 @@
 
 #define DEFAULT_SRC "lineage"
 #define SRC_MOUNT "/mnt/src"
+#define ISO_MOUNT "/mnt/iso"
 #define ANDROID_ROOT "/android"
 #define FIND_TRIES 60
 
@@ -45,12 +50,14 @@ struct options {
 	int live;
 	int previous;
 	char id[64];
+	char iso[256];
 };
 
 static void set_src(struct options *o, const char *v) { snprintf(o->src, sizeof o->src, "%s", v); }
 static void set_live(struct options *o, const char *v) { o->live = !strcmp(v, "1"); }
 static void set_previous(struct options *o, const char *v) { o->previous = !strcmp(v, "1"); }
 static void set_id(struct options *o, const char *v) { snprintf(o->id, sizeof o->id, "%s", v); }
+static void set_iso(struct options *o, const char *v) { snprintf(o->iso, sizeof o->iso, "%s", v); }
 
 static const struct {
 	const char *key;
@@ -60,6 +67,7 @@ static const struct {
 	{ "pc.live=", set_live },
 	{ "pc.previous=", set_previous },
 	{ "pc.id=", set_id },
+	{ "iso-scan/filename=", set_iso },
 };
 
 static void parse_cmdline(const char *cmdline, struct options *o)
@@ -76,7 +84,8 @@ static void parse_cmdline(const char *cmdline, struct options *o)
 /* ---- plan ------------------------------------------------------------------------------ */
 
 struct plan {
-	char system[PATH_MAX]; /* relative to the partition root */
+	char root[PATH_MAX];   /* where the install folder was found: a partition or an ISO in one */
+	char system[PATH_MAX]; /* relative to root */
 	const char *system_kind;
 	char data[PATH_MAX];
 	const char *data_kind;
@@ -140,6 +149,86 @@ static int make_plan(const char *root, const struct options *o, struct plan *p)
 	return 0;
 }
 
+/* ---- ISO files on a partition (Ventoy and other multiboot sticks) ---------------------- */
+
+#define ISO_LABEL "LINEAGE_PC"
+#define ISO_PVD_OFFSET (16 * 2048)
+#define MAX_ISOS 16
+
+struct iso_list {
+	char path[MAX_ISOS][PATH_MAX]; /* relative to the partition root */
+	size_t count;
+};
+
+/* Our ISO: an ISO 9660 primary volume descriptor (sector 16) with the volume label LINEAGE_PC. */
+static int is_our_iso(const char *path)
+{
+	unsigned char pvd[72];
+	int fd = open(path, O_RDONLY | O_CLOEXEC);
+	ssize_t n = fd >= 0 ? pread(fd, pvd, sizeof pvd, ISO_PVD_OFFSET) : -1;
+	if (fd >= 0)
+		close(fd);
+	if (n != (ssize_t)sizeof pvd || pvd[0] != 1 || memcmp(pvd + 1, "CD001", 5))
+		return 0;
+	char label[33];
+	memcpy(label, pvd + 40, 32);
+	label[32] = 0;
+	for (int i = 31; i >= 0 && label[i] == ' '; i--)
+		label[i] = 0;
+	return !strcmp(label, ISO_LABEL);
+}
+
+static int has_iso_suffix(const char *name)
+{
+	size_t len = strlen(name);
+	return len > 4 && !strcasecmp(name + len - 4, ".iso");
+}
+
+static void add_iso(const char *root, const char *rel, struct iso_list *l)
+{
+	char full[PATH_MAX * 2];
+	snprintf(full, sizeof full, "%s/%s", root, rel);
+	if (l->count >= MAX_ISOS || !is_our_iso(full))
+		return;
+	snprintf(l->path[l->count++], PATH_MAX, "%s", rel);
+}
+
+static void scan_isos(const char *root, const char *dir_rel, int depth, struct iso_list *l)
+{
+	char dir_path[PATH_MAX * 2];
+	snprintf(dir_path, sizeof dir_path, "%s/%s", root, dir_rel);
+	DIR *dir = opendir(dir_path);
+	if (!dir)
+		return;
+	struct dirent *e;
+	while ((e = readdir(dir))) {
+		if (e->d_name[0] == '.')
+			continue;
+		char rel[PATH_MAX];
+		snprintf(rel, sizeof rel, "%s%s%s", dir_rel, dir_rel[0] ? "/" : "", e->d_name);
+		if (has_iso_suffix(e->d_name)) {
+			add_iso(root, rel, l);
+			continue;
+		}
+		char full[PATH_MAX * 2];
+		snprintf(full, sizeof full, "%s/%s", root, rel);
+		if (depth > 0 && is_dir(full))
+			scan_isos(root, rel, depth - 1, l);
+	}
+	closedir(dir);
+}
+
+/* iso-scan/filename= names the file; otherwise look at the root and one folder down. */
+static void find_isos(const char *root, const struct options *o, struct iso_list *l)
+{
+	*l = (struct iso_list){ .count = 0 };
+	if (o->iso[0]) {
+		add_iso(root, o->iso + (o->iso[0] == '/'), l);
+		return;
+	}
+	scan_isos(root, "", 1, l);
+}
+
 /* ---- stage-1 init ---------------------------------------------------------------------- */
 
 static void say(const char *fmt, ...)
@@ -183,7 +272,9 @@ static int is_candidate(const char *name)
 	return 1;
 }
 
-/* Mount every block device in turn until one holds the install folder. */
+static int find_in_isos(const struct options *o, struct plan *p);
+
+/* Mount every block device in turn until one holds the install folder, directly or in our ISO. */
 static int find_install(const struct options *o, struct plan *p)
 {
 	DIR *dir = opendir("/sys/class/block");
@@ -199,10 +290,14 @@ static int find_install(const struct options *o, struct plan *p)
 		if (mount_any(dev, SRC_MOUNT, MS_RDONLY))
 			continue;
 		found = make_plan(SRC_MOUNT, o, p);
+		if (!found) {
+			snprintf(p->root, sizeof p->root, "%s", SRC_MOUNT);
+			say("install folder %s on %s", o->src, dev);
+			continue;
+		}
+		found = find_in_isos(o, p);
 		if (found)
 			umount(SRC_MOUNT);
-		else
-			say("install folder %s on %s", o->src, dev);
 	}
 	closedir(dir);
 	return found;
@@ -227,6 +322,26 @@ static int attach_loop(const char *file, int read_only, char *dev, size_t len)
 	if (loop >= 0)
 		close(loop);
 	return ok;
+}
+
+/* The partition at SRC_MOUNT stays mounted: the ISO's loop device keeps the file open. */
+static int find_in_isos(const struct options *o, struct plan *p)
+{
+	struct iso_list l;
+	find_isos(SRC_MOUNT, o, &l);
+	for (size_t i = 0; i < l.count; i++) {
+		char file[PATH_MAX * 2], dev[64];
+		snprintf(file, sizeof file, "%s/%s", SRC_MOUNT, l.path[i]);
+		if (attach_loop(file, 1, dev, sizeof dev) || mount(dev, ISO_MOUNT, "iso9660", MS_RDONLY, NULL))
+			continue;
+		if (!make_plan(ISO_MOUNT, o, p)) {
+			snprintf(p->root, sizeof p->root, "%s", ISO_MOUNT);
+			say("install folder %s in %s", o->src, l.path[i]);
+			return 0;
+		}
+		umount(ISO_MOUNT);
+	}
+	return -1;
 }
 
 static int mount_image(const char *file, const char *target, unsigned long flags)
@@ -265,10 +380,11 @@ static const struct {
 	{ "tmpfs", mount_ram },
 };
 
-static int mount_kind(const char *kind, const char *rel, const char *target, unsigned long flags)
+static int mount_kind(const char *kind, const char *root, const char *rel, const char *target,
+		      unsigned long flags)
 {
 	char src[PATH_MAX * 2];
-	snprintf(src, sizeof src, "%s/%s", SRC_MOUNT, rel);
+	snprintf(src, sizeof src, "%s/%s", root, rel);
 	for (size_t i = 0; i < sizeof MOUNTERS / sizeof *MOUNTERS; i++)
 		if (!strcmp(kind, MOUNTERS[i].kind))
 			return MOUNTERS[i].mount(src, target, flags);
@@ -294,6 +410,7 @@ static int stage1(void)
 	mount("devtmpfs", "/dev", "devtmpfs", 0, NULL);
 	mkdir("/mnt", 0755);
 	mkdir(SRC_MOUNT, 0755);
+	mkdir(ISO_MOUNT, 0755);
 	mkdir(ANDROID_ROOT, 0755);
 
 	char cmdline[4096];
@@ -312,9 +429,9 @@ static int stage1(void)
 	if (strcmp(p.data_kind, "tmpfs"))
 		mount(NULL, SRC_MOUNT, NULL, MS_REMOUNT, NULL);
 
-	if (mount_kind(p.system_kind, p.system, ANDROID_ROOT, MS_RDONLY))
+	if (mount_kind(p.system_kind, p.root, p.system, ANDROID_ROOT, MS_RDONLY))
 		halt_with("cannot mount the system");
-	if (mount_kind(p.data_kind, p.data, ANDROID_ROOT "/data", MS_NOSUID | MS_NODEV | MS_NOATIME))
+	if (mount_kind(p.data_kind, p.root, p.data, ANDROID_ROOT "/data", MS_NOSUID | MS_NODEV | MS_NOATIME))
 		halt_with("cannot mount the user data");
 	say("system %s (%s), data %s (%s); starting Android", p.system, p.system_kind, p.data, p.data_kind);
 
@@ -338,7 +455,7 @@ static int print_cmdline(const char *cmdline)
 {
 	struct options o;
 	parse_cmdline(cmdline, &o);
-	printf("src=%s\nlive=%d\nprevious=%d\nid=%s\n", o.src, o.live, o.previous, o.id);
+	printf("src=%s\nlive=%d\nprevious=%d\nid=%s\niso=%s\n", o.src, o.live, o.previous, o.id, o.iso);
 	return 0;
 }
 
@@ -353,14 +470,27 @@ static int print_plan(const char *root, const char *cmdline)
 	return 0;
 }
 
+static int print_isos(const char *root, const char *cmdline)
+{
+	struct options o;
+	struct iso_list l;
+	parse_cmdline(cmdline, &o);
+	find_isos(root, &o, &l);
+	for (size_t i = 0; i < l.count; i++)
+		puts(l.path[i]);
+	return 0;
+}
+
 int main(int argc, char **argv)
 {
 	if (argc == 3 && !strcmp(argv[1], "--cmdline"))
 		return print_cmdline(argv[2]);
 	if (argc == 4 && !strcmp(argv[1], "--plan"))
 		return print_plan(argv[2], argv[3]);
+	if (argc == 4 && !strcmp(argv[1], "--isos"))
+		return print_isos(argv[2], argv[3]);
 	if (getpid() != 1) {
-		fprintf(stderr, "usage: pc-init --cmdline CMDLINE | --plan ROOT CMDLINE (or run as PID 1)\n");
+		fprintf(stderr, "usage: pc-init --cmdline CMDLINE | --plan ROOT CMDLINE | --isos ROOT CMDLINE (or as PID 1)\n");
 		return 2;
 	}
 	return stage1();

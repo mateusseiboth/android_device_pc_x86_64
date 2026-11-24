@@ -46,11 +46,11 @@ class PcInitTest(unittest.TestCase):
 
 class CmdlineTest(PcInitTest):
     def test_defaults(self):
-        self.assertEqual(self.parse("quiet"), {"src": "lineage", "live": "0", "previous": "0", "id": ""})
+        self.assertEqual(self.parse("quiet"), {"src": "lineage", "live": "0", "previous": "0", "id": "", "iso": ""})
 
     def test_reads_the_install_folder_live_mode_and_previous_system(self):
         self.assertEqual(self.parse("BOOT_IMAGE=/x pc.src=android/lineage pc.live=1 pc.previous=1 quiet"),
-                         {"src": "android/lineage", "live": "1", "previous": "1", "id": ""})
+                         {"src": "android/lineage", "live": "1", "previous": "1", "id": "", "iso": ""})
 
     def test_reads_the_install_id(self):
         self.assertEqual(self.parse("pc.id=0011aabb pc.src=lineage")["id"], "0011aabb")
@@ -102,6 +102,44 @@ class PlanTest(PcInitTest):
 
     def test_a_partition_without_the_folder_is_not_the_install(self):
         self.assertIsNone(self.plan(self.install("other/system.img")))
+
+
+
+def write_iso(path, label):
+    """A file with an ISO 9660 primary volume descriptor (sector 16) carrying LABEL."""
+    pvd = bytearray(2048)
+    pvd[0] = 1
+    pvd[1:6] = b"CD001"
+    pvd[6] = 1
+    pvd[40:72] = label.encode().ljust(32, b" ")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(bytes(16 * 2048) + bytes(pvd) + bytes(2048))
+
+
+class IsoFileTest(PcInitTest):
+    # Ventoy and other multiboot sticks keep the ISO as a file on their data partition; pc-init finds it
+    # there (by iso-scan/filename= or by its volume label) and boots the folder inside it.
+    def isos(self, root, cmdline=""):
+        return self.run_exe("--isos", str(root), cmdline).splitlines()
+
+    def test_reads_iso_scan_filename(self):
+        self.assertEqual(self.parse("iso-scan/filename=/ISO/lineage-pc.iso quiet")["iso"], "/ISO/lineage-pc.iso")
+
+    def test_our_iso_is_found_by_its_label_at_the_root_and_one_folder_down(self):
+        root = Path(tempfile.mkdtemp(dir=self.tmp))
+        write_iso(root / "lineage-pc.iso", "LINEAGE_PC")
+        write_iso(root / "ISO" / "LINEAGE.ISO", "LINEAGE_PC")
+        write_iso(root / "ubuntu.iso", "Ubuntu 26.04 LTS amd64")
+        (root / "notes.iso").write_bytes(b"not an iso")
+        self.assertEqual(sorted(self.isos(root)), ["ISO/LINEAGE.ISO", "lineage-pc.iso"])
+
+    def test_iso_scan_names_the_file(self):
+        root = Path(tempfile.mkdtemp(dir=self.tmp))
+        write_iso(root / "deep" / "er" / "x.iso", "LINEAGE_PC")
+        self.assertEqual(self.isos(root, "iso-scan/filename=/deep/er/x.iso"), ["deep/er/x.iso"])
+
+    def test_no_iso_no_candidates(self):
+        self.assertEqual(self.isos(Path(tempfile.mkdtemp(dir=self.tmp))), [])
 
 
 if __name__ == "__main__":
