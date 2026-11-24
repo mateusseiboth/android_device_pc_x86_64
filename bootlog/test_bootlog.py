@@ -6,6 +6,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -28,6 +29,23 @@ def find_googletest():
 
 
 GTEST = find_googletest()
+
+
+def find_tree_file(rel):
+    roots = [Path(os.environ["ANDROID_BUILD_TOP"])] if os.environ.get("ANDROID_BUILD_TOP") else []
+    for root in roots + list(HERE.parents):
+        if (root / rel).exists():
+            return root / rel
+    return None
+
+
+MONO_TTF = find_tree_file("frameworks/base/data/fonts/DroidSansMono.ttf")
+try:
+    from PIL import Image
+except ImportError:
+    Image = None
+CHARSET = list(range(0x20, 0x7F)) + list(range(0xA0, 0x100))
+FONT_HEIGHTS = (22, 32)
 
 
 def read(rel):
@@ -63,6 +81,52 @@ class HostGTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
+@unittest.skipUnless(Image and MONO_TTF, "needs Pillow and frameworks/base/data/fonts (set ANDROID_BUILD_TOP)")
+class FontStripTest(unittest.TestCase):
+    """font/make_font.py rasterizes DroidSansMono into the strips the renderer reads."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = Path(tempfile.mkdtemp())
+        for height in FONT_HEIGHTS:
+            subprocess.run([sys.executable, "-I", str(HERE / "font/make_font.py"), str(MONO_TTF), str(height),
+                            str(cls.tmp)], check=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmp)
+
+    def generated(self):
+        return sorted(self.tmp.glob("font-*.png"))
+
+    def test_one_strip_per_height_with_every_glyph_in_two_rows(self):
+        strips = self.generated()
+        self.assertEqual(len(strips), len(FONT_HEIGHTS))
+        for path, height in zip(strips, FONT_HEIGHTS):
+            with Image.open(path) as image:
+                self.assertEqual(image.mode, "L")
+                self.assertEqual(image.height, 2 * height)
+                self.assertEqual(image.width % len(CHARSET), 0)
+                self.assertEqual(path.name, f"font-{image.width // len(CHARSET)}x{height}.png")
+
+    def test_every_visible_character_has_ink_in_both_weights(self):
+        blank = {0x20, 0xA0, 0xAD}  # space, no-break space, soft hyphen
+        for path in self.generated():
+            with Image.open(path) as image:
+                cw, ch = image.width // len(CHARSET), image.height // 2
+                for index, code in enumerate(CHARSET):
+                    for row in (0, 1):
+                        cell = image.crop((index * cw, row * ch, (index + 1) * cw, (row + 1) * ch))
+                        self.assertEqual(cell.getbbox() is None, code in blank, f"{path.name} U+{code:04X} row {row}")
+
+    def test_the_committed_strips_are_the_generator_output(self):
+        committed = sorted((HERE / "font").glob("font-*.png"))
+        self.assertEqual([p.name for p in committed], [p.name for p in self.generated()])
+        for mine, fresh in zip(committed, self.generated()):
+            with Image.open(mine) as a, Image.open(fresh) as b:
+                self.assertEqual(a.tobytes(), b.tobytes(), mine.name)
+
+
 class AndroidBpTest(unittest.TestCase):
     def setUp(self):
         self.bp = read("bootlog/Android.bp")
@@ -73,7 +137,9 @@ class AndroidBpTest(unittest.TestCase):
         self.assertIn('init_rc: ["pc-bootlog.rc"]', binary)
         for lib in ("libgui", "libui", "libutils", "libbinder", "libbase", "libpng"):
             self.assertIn(f'"{lib}"', binary)
-        for asset in ("pc-bootlog-logo.png", "pc-bootlog-font-12x22.png", "pc-bootlog-font-18x32.png"):
+        fonts = sorted(p.name for p in (HERE / "font").glob("font-*.png"))
+        self.assertEqual(len(fonts), len(FONT_HEIGHTS))
+        for asset in ["pc-bootlog-logo.png"] + [f"pc-bootlog-{name}" for name in fonts]:
             self.assertIn(f'"{asset}"', binary)
 
     def test_the_model_builds_for_the_host_and_has_a_host_test(self):
@@ -83,7 +149,7 @@ class AndroidBpTest(unittest.TestCase):
     def test_assets_exist(self):
         for path in re.findall(r'src: "([^"]+\.png)"', self.bp):
             self.assertTrue((HERE / path).exists(), path)
-        self.assertTrue((HERE / "font/OFL.txt").exists())
+        self.assertTrue((HERE / "font/NOTICE").exists())
 
 
 class InitRcTest(unittest.TestCase):

@@ -86,24 +86,47 @@ TEST(DrawImage, blendsByAlpha) {
     EXPECT_EQ(px.canvas.at(2, 0), (Rgb{0, 0, 0}));
 }
 
-// A 96-glyph strip (AOSP recovery's layout) with 2x3 cells: every glyph has one lit pixel in its
-// top-left corner, 'A' and the bold '?' are fully lit.
+// A strip in our layout (glyphIndex order: ASCII then Latin-1) with 2x3 cells: every glyph has one lit
+// pixel in its top-left corner; 'A', U+00E9 and the bold '?' are fully lit.
 GrayImage testStrip() {
-    const int cw = 2, ch = 3;
-    GrayImage strip{96 * cw, 2 * ch, std::vector<uint8_t>(96 * cw * 2 * ch, 0)};
+    const int cw = 2, ch = 3, count = static_cast<int>(glyphCount());
+    GrayImage strip{count * cw, 2 * ch, std::vector<uint8_t>(count * cw * 2 * ch, 0)};
     auto lit = [&](int glyph, int row, int x, int y) { strip.gray[(row * ch + y) * strip.width + glyph * cw + x] = 255; };
-    for (int g = 0; g < 96; ++g) lit(g, 0, 0, 0);
+    for (int g = 0; g < count; ++g) lit(g, 0, 0, 0);
     for (int y = 0; y < ch; ++y)
         for (int x = 0; x < cw; ++x) {
-            lit('A' - 0x20, 0, x, y);
-            lit('?' - 0x20, 1, x, y);
+            lit(*glyphIndex(U'A'), 0, x, y);
+            lit(*glyphIndex(U'é'), 0, x, y);
+            lit(*glyphIndex(U'?'), 1, x, y);
         }
     return strip;
 }
 
-TEST(Font, rejectsAStripWithoutTheRecoveryLayout) {
-    EXPECT_FALSE(Font::fromStrip(GrayImage{95, 6, std::vector<uint8_t>(95 * 6)}, 1).has_value());
-    EXPECT_FALSE(Font::fromStrip(GrayImage{192, 5, std::vector<uint8_t>(192 * 5)}, 1).has_value());
+TEST(GlyphIndex, coversAsciiAndLatin1) {
+    EXPECT_EQ(glyphCount(), 95u + 96u);
+    EXPECT_EQ(glyphIndex(U' '), 0);
+    EXPECT_EQ(glyphIndex(U'~'), 94);
+    EXPECT_EQ(glyphIndex(U' '), 95);
+    EXPECT_EQ(glyphIndex(U'ÿ'), 190);
+    EXPECT_FALSE(glyphIndex(U'\x7f').has_value());
+    EXPECT_FALSE(glyphIndex(U'\x01').has_value());
+    EXPECT_FALSE(glyphIndex(U'Ā').has_value());
+    EXPECT_FALSE(glyphIndex(U'—').has_value());
+}
+
+TEST(GlyphIndex, everyCharacterOnScreenHasAGlyph) {
+    for (Language language : {Language::kEnglish, Language::kPortuguese}) {
+        for (char32_t c : decodeUtf8(title(language))) EXPECT_TRUE(glyphIndex(c).has_value()) << int(c);
+        for (Stage stage : kAllStages)
+            for (char32_t c : decodeUtf8(stageName(stage, language))) EXPECT_TRUE(glyphIndex(c).has_value()) << int(c);
+        for (char32_t c : decodeUtf8(formatClock(123456, "x"))) EXPECT_TRUE(glyphIndex(c).has_value()) << int(c);
+    }
+}
+
+TEST(Font, rejectsAStripWithoutOurLayout) {
+    EXPECT_FALSE(Font::fromStrip(GrayImage{96 * 2, 6, std::vector<uint8_t>(96 * 2 * 6)}, 1).has_value());
+    EXPECT_FALSE(Font::fromStrip(GrayImage{191 * 2, 5, std::vector<uint8_t>(191 * 2 * 5)}, 1).has_value());
+    EXPECT_FALSE(Font::fromStrip(GrayImage{191 * 2, 6, std::vector<uint8_t>(10)}, 1).has_value());
     EXPECT_FALSE(Font::fromStrip(testStrip(), 0).has_value());
 }
 
@@ -126,12 +149,24 @@ TEST(Font, drawsGlyphCoverageScaled) {
     EXPECT_EQ(px.canvas.at(4, 2), (Rgb{0, 0, 0}));
 }
 
+TEST(Font, drawsAccentedLettersFromUtf8AsOneCell) {
+    const auto font = Font::fromStrip(testStrip(), 1);
+    Pixels px(6, 3, 6);
+    px.canvas.fill({0, 0, 6, 3}, {0, 0, 0});
+    font->draw(px.canvas, 0, 0, "\xc3\xa9.", {9, 9, 9}, Weight::kRegular, 10);
+    EXPECT_EQ(px.canvas.at(1, 2), (Rgb{9, 9, 9}));  // U+00E9 fully lit in the first cell
+    EXPECT_EQ(px.canvas.at(2, 0), (Rgb{9, 9, 9}));  // '.' in the second cell
+    EXPECT_EQ(px.canvas.at(3, 2), (Rgb{0, 0, 0}));
+    EXPECT_EQ(px.canvas.at(4, 0), (Rgb{0, 0, 0}));  // two characters, two cells
+}
+
 TEST(Font, boldUsesTheSecondRowAndUnknownCharactersAreQuestionMarks) {
     const auto font = Font::fromStrip(testStrip(), 1);
-    Pixels px(2, 3, 2);
-    px.canvas.fill({0, 0, 2, 3}, {0, 0, 0});
-    font->draw(px.canvas, 0, 0, "\x01", {7, 7, 7}, Weight::kBold, 10);
+    Pixels px(4, 3, 4);
+    px.canvas.fill({0, 0, 4, 3}, {0, 0, 0});
+    font->draw(px.canvas, 0, 0, "\x01\xe2\x80\x94", {7, 7, 7}, Weight::kBold, 10);
     EXPECT_EQ(px.canvas.at(1, 2), (Rgb{7, 7, 7}));
+    EXPECT_EQ(px.canvas.at(3, 2), (Rgb{7, 7, 7}));
 }
 
 TEST(Font, stopsAtTheColumnLimit) {
@@ -143,12 +178,23 @@ TEST(Font, stopsAtTheColumnLimit) {
     EXPECT_EQ(px.canvas.at(4, 0), (Rgb{0, 0, 0}));
 }
 
-TEST(FoldToAscii, keepsAsciiAndDropsAccents) {
-    EXPECT_EQ(foldToAscii("I/Tag(1): ok"), "I/Tag(1): ok");
-    EXPECT_EQ(foldToAscii("gr\xc3\xa1" "ficos"), "graficos");
-    EXPECT_EQ(foldToAscii("a\xc3\xa7\xc3\xa3o \xc3\x89"), "acao E");
-    EXPECT_EQ(foldToAscii("\xe6\x97\xa5x"), "?x");
-    EXPECT_EQ(foldToAscii("a\x01" "b"), "a b");
+TEST(DecodeUtf8, asciiAndPortuguese) {
+    EXPECT_EQ(decodeUtf8("I/Tag(1): ok"), U"I/Tag(1): ok");
+    EXPECT_EQ(decodeUtf8("pr\xc3\xa9-carga"), U"pré-carga");
+    EXPECT_EQ(decodeUtf8("a\xc3\xa7\xc3\xa3o \xc3\x89"), U"ação É");
+}
+
+TEST(DecodeUtf8, longerSequences) {
+    EXPECT_EQ(decodeUtf8("\xe6\x97\xa5x"), U"日x");
+    EXPECT_EQ(decodeUtf8("\xf0\x9f\x98\x80"), U"\U0001F600");
+}
+
+TEST(DecodeUtf8, brokenBytesBecomeReplacementCharacters) {
+    EXPECT_EQ(decodeUtf8("a\xff" "b"), U"a�b");
+    EXPECT_EQ(decodeUtf8("a\xc3"), U"a�");          // cut short
+    EXPECT_EQ(decodeUtf8("\xc3(x"), U"�(x");          // no continuation byte
+    EXPECT_EQ(decodeUtf8("\xc0\xaf"), U"��");    // overlong
+    EXPECT_EQ(decodeUtf8("\x80"), U"�");              // stray continuation byte
 }
 
 TEST(ChooseFont, fullHdUsesTheSmallFontAsIs) {

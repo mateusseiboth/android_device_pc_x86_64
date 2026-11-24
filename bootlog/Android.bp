@@ -46,7 +46,7 @@ cc_binary {
     required: [
         "pc-bootlog-logo.png",
         "pc-bootlog-font-12x22.png",
-        "pc-bootlog-font-18x32.png",
+        "pc-bootlog-font-17x32.png",
     ],
 }
 
@@ -58,19 +58,19 @@ prebuilt_etc {
     system_ext_specific: true,
 }
 
-// AOSP recovery's font images (Inconsolata, OFL; see font/README).
+// Glyph strips (ASCII and Latin-1) rasterized from DroidSansMono by font/make_font.py; see font/README.
 prebuilt_etc {
     name: "pc-bootlog-font-12x22.png",
-    src: "font/12x22.png",
+    src: "font/font-12x22.png",
     filename: "font-12x22.png",
     sub_dir: "pc-bootlog",
     system_ext_specific: true,
 }
 
 prebuilt_etc {
-    name: "pc-bootlog-font-18x32.png",
-    src: "font/18x32.png",
-    filename: "font-18x32.png",
+    name: "pc-bootlog-font-17x32.png",
+    src: "font/font-17x32.png",
+    filename: "font-17x32.png",
     sub_dir: "pc-bootlog",
     system_ext_specific: true,
 }

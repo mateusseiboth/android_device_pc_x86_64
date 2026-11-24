@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  *
  * Boot log drawing on the CPU, free of Android dependencies (tested on the host): a pixel buffer as
- * Surface::lock hands it (RGBX_8888), the logo scaled once, a bitmap font cut from AOSP recovery's
- * glyph strips, the layout for PC screens and the whole frame.
+ * Surface::lock hands it (RGBX_8888), the logo scaled once, a bitmap font (ASCII and Latin-1, cut from
+ * the strips font/make_font.py makes), the layout for PC screens and the whole frame.
  */
 #pragma once
 
@@ -63,15 +63,24 @@ struct GrayImage {
 
 enum class Weight { kRegular, kBold };
 
-// AOSP recovery's font images (bootable/recovery/fonts): the 96 characters 0x20..0x7f side by side,
-// regular on the top row and bold on the bottom one. Drawn at an integer scale.
+// The font's characters: ASCII 0x20..0x7e, then Latin-1 0xa0..0xff (every letter of Portuguese).
+size_t glyphCount();
+// Position of a code point in the strip, or nothing when the font lacks it.
+std::optional<int> glyphIndex(char32_t code);
+
+// UTF-8 to code points; a byte that does not start a valid sequence becomes U+FFFD.
+std::u32string decodeUtf8(std::string_view utf8);
+
+// A glyph strip (font/make_font.py): glyphCount() cells side by side in glyphIndex() order, regular on
+// the top row and bold on the bottom one. Drawn at an integer scale.
 class Font {
   public:
     static std::optional<Font> fromStrip(GrayImage strip, int scale);
 
     int cellWidth() const { return glyphWidth_ * scale_; }
     int cellHeight() const { return glyphHeight_ * scale_; }
-    // Draws ASCII text with its top-left corner at (x, top); other bytes are drawn as '?'.
+    // Draws UTF-8 text with its top-left corner at (x, top), one cell per code point; characters
+    // the font lacks are drawn as '?'.
     void draw(Canvas& canvas, int x, int top, std::string_view text, Rgb color, Weight weight, int maxCols) const;
 
   private:
@@ -81,10 +90,6 @@ class Font {
     GrayImage strip_;
     int scale_, glyphWidth_, glyphHeight_;
 };
-
-// The font only has ASCII: accented Latin letters lose the accent, other characters become '?' and
-// control characters spaces.
-std::string foldToAscii(std::string_view utf8);
 
 struct FontChoice {
     size_t index;

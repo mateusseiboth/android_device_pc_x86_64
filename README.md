@@ -146,10 +146,12 @@ as SurfaceFlinger is up, with no Java VM competing with zygote.
   `/system/bin/bootanimation` in its place, keeping the pid WindowManager watches.
 - It leaves when `service.bootanim.exit` goes from 0 to 1 or when `boot_progress_enable_screen` shows up
   in the log; it never holds the boot. A 10-minute guard hands over to the stock animation.
-- Text: AOSP recovery's Inconsolata glyph images (`bootlog/font/`), 12x22 or 18x32 at an integer scale,
-  picked for about 48 rows on the short side of the screen, or larger on a dense display. 1080p shows a
-  158x45 terminal. Stage names in Brazilian Portuguese or English, from `persist.sys.locale`
-  (`ro.product.locale` before the user picks one).
+- Text: DroidSansMono glyph strips with ASCII and Latin-1 (`bootlog/font/`, made on the host by
+  `font/make_font.py`), 12x22 or 17x32 at an integer scale, picked for about 48 rows on the short side
+  of the screen, or larger on a dense display. 1080p shows a 158x45 terminal. The log and the stage
+  names are decoded as UTF-8, so Portuguese keeps its accents; characters outside Latin-1 show as `?`.
+  Stage names in Brazilian Portuguese or English, from `persist.sys.locale` (`ro.product.locale`
+  before the user picks one).
 - Logo: `bootlog/logo.png`, scaled once at boot to a fifth of the short side; the terminal's purple and
   orange come from it.
 - `androidboot.pc.bootlog=0` on the kernel command line runs the stock animation instead.
@@ -189,7 +191,7 @@ Tests: `python3 -m unittest` in `kernel/`, `initrd/`, `iso/`, `vulkan/`, `termin
 - AOSP Cuttlefish: `audio/primary_audio_policy_configuration.xml` comes from [device/google/cuttlefish](https://android.googlesource.com/device/google/cuttlefish).
 - The boot log comes from Mateus Seiboth's projector boot log, [hy300-rk3566/android/bootlog](https://github.com/mateusseiboth/hy300-rk3566/tree/main/android/bootlog): its log model, stages and look, ported here to its native version.
   - Logo: capybara artwork by Mateus Seiboth.
-  - `bootlog/font/` holds AOSP recovery's [font images](https://android.googlesource.com/platform/bootable/recovery/+/refs/heads/main/fonts), made from [Inconsolata](https://levien.com/type/myfonts/inconsolata.html) by Raph Levien (SIL Open Font License, `bootlog/font/OFL.txt`).
+  - `bootlog/font/` holds glyph strips rasterized from AOSP's DroidSansMono (`frameworks/base/data/fonts`, Apache License 2.0, `bootlog/font/NOTICE`).
 - [Mesa](https://mesa3d.org), [minigbm](https://chromium.googlesource.com/chromiumos/platform/minigbm) (ChromiumOS), [drm_hwcomposer](https://gitlab.freedesktop.org/drm/hwcomposer), [linux-firmware](https://gitlab.com/kernel-firmware/linux-firmware), the [Linux kernel](https://kernel.org) and [Fedora](https://fedoraproject.org)'s kernel configuration, used as the base of `kernel/fedora-7.2.config`.
 
 Thanks to everyone behind these projects. Files taken from them keep their original licenses and copyright notices.

@@ -11,16 +11,57 @@ namespace pc::bootlog {
 
 namespace {
 
-constexpr int kGlyphCount = 96;  // 0x20..0x7f
-constexpr char kFirstGlyph = 0x20;
 constexpr int kMaxScale = 8;
 constexpr double kRowsOnShortSide = 48.0;
 constexpr float kTextDp = 15.f;
 constexpr int kLogoFraction = 5;  // of the short side
 
-// U+00C0..U+00FF (UTF-8 C3 80..C3 BF) without their accents.
-constexpr std::string_view kLatin1Letters = "AAAAAA?CEEEEIIIIDNOOOOOxOUUUUY?saaaaaa?ceeeeiiiidnooooo?ouuuuy?y";
-static_assert(kLatin1Letters.size() == 64);
+constexpr char32_t kReplacement = 0xfffd;
+constexpr char32_t kMissingGlyph = U'?';
+
+// The strip's characters, in order (font/make_font.py's CHARSET).
+struct GlyphRange {
+    char32_t first, last;
+};
+
+constexpr GlyphRange kGlyphRanges[] = {
+        {0x20, 0x7e},  // ASCII
+        {0xa0, 0xff},  // Latin-1
+};
+
+// UTF-8 sequence forms: lead byte pattern, length and smallest code point (shorter is overlong).
+struct Utf8Form {
+    uint8_t mask, lead;
+    size_t length;
+    char32_t minimum;
+};
+
+constexpr Utf8Form kUtf8Forms[] = {
+        {0x80, 0x00, 1, 0x0},
+        {0xe0, 0xc0, 2, 0x80},
+        {0xf0, 0xe0, 3, 0x800},
+        {0xf8, 0xf0, 4, 0x10000},
+};
+
+bool isScalar(char32_t code) {
+    return code <= 0x10ffff && (code < 0xd800 || code > 0xdfff);
+}
+
+// The code point at the start of text and the bytes it takes; a broken sequence takes one byte.
+std::pair<char32_t, size_t> decodeOne(std::string_view text) {
+    const auto lead = static_cast<uint8_t>(text[0]);
+    const auto* form = std::find_if(std::begin(kUtf8Forms), std::end(kUtf8Forms),
+                                    [&](const Utf8Form& f) { return (lead & f.mask) == f.lead; });
+    if (form == std::end(kUtf8Forms) || text.size() < form->length) return {kReplacement, 1};
+    char32_t code = lead & static_cast<uint8_t>(~form->mask);
+    for (size_t i = 1; i < form->length; ++i) {
+        const auto byte = static_cast<uint8_t>(text[i]);
+        if ((byte & 0xc0) != 0x80) return {kReplacement, 1};
+        code = (code << 6) | (byte & 0x3f);
+    }
+    if (code < form->minimum || !isScalar(code)) return {kReplacement, 1};
+    return {code, form->length};
+}
 
 uint32_t pack(Rgb c) {
     return 0xff000000u | (uint32_t{c.b} << 16) | (uint32_t{c.g} << 8) | c.r;
@@ -28,26 +69,6 @@ uint32_t pack(Rgb c) {
 
 uint8_t mix(uint8_t dst, uint8_t src, uint8_t alpha) {
     return static_cast<uint8_t>((src * alpha + dst * (255 - alpha)) / 255);
-}
-
-size_t sequenceLength(uint8_t lead) {
-    if (lead < 0xc0) return 1;
-    if (lead < 0xe0) return 2;
-    return lead < 0xf0 ? 3 : 4;
-}
-
-char foldSequence(std::string_view sequence) {
-    const auto lead = static_cast<uint8_t>(sequence[0]);
-    if (lead < 0x20 || lead == 0x7f) return ' ';
-    if (lead < 0x80) return static_cast<char>(lead);
-    if (lead != 0xc3 || sequence.size() != 2) return '?';
-    return kLatin1Letters[static_cast<uint8_t>(sequence[1]) & 0x3f];
-}
-
-int glyphIndex(char ch) {
-    const auto byte = static_cast<uint8_t>(ch);
-    const bool printable = byte >= kFirstGlyph && byte < kFirstGlyph + kGlyphCount;
-    return (printable ? byte : '?') - kFirstGlyph;
 }
 
 struct AreaSum {
@@ -84,20 +105,15 @@ std::pair<int, int> sourceSpan(int i, int destination, int source) {
     return {begin, std::max(begin + 1, (i + 1) * source / destination)};
 }
 
-void drawText(Canvas& canvas, const Font& font, int x, int top, const std::string& text, Rgb color, Weight weight,
-              int maxCols) {
-    font.draw(canvas, x, top, foldToAscii(text), color, weight, maxCols);
-}
-
 void drawHeader(Canvas& canvas, const Layout& layout, const Font& font, const FrameText& text) {
     const Palette& palette = defaultPalette();
     const int pad = font.cellWidth();
     const int top = layout.header.top + (layout.header.height() - font.cellHeight()) / 2;
     const int cols = layout.header.width() / font.cellWidth();
-    const std::string clock = foldToAscii(text.clock);
-    drawText(canvas, font, layout.header.left + pad, top, text.title, palette.title, Weight::kBold, cols);
-    const int clockX = layout.header.right - pad - static_cast<int>(clock.size()) * font.cellWidth();
-    drawText(canvas, font, clockX, top, clock, palette.clock, Weight::kRegular, cols);
+    const int clockCols = static_cast<int>(decodeUtf8(text.clock).size());
+    font.draw(canvas, layout.header.left + pad, top, text.title, palette.title, Weight::kBold, cols);
+    const int clockX = layout.header.right - pad - clockCols * font.cellWidth();
+    font.draw(canvas, clockX, top, text.clock, palette.clock, Weight::kRegular, cols);
     canvas.fill(layout.rule, palette.rule);
 }
 
@@ -105,8 +121,8 @@ void drawLog(Canvas& canvas, const Layout& layout, const Font& font, const std::
     const size_t shown = std::min(lines.size(), static_cast<size_t>(layout.logRows));
     int top = layout.log.top;
     for (auto line = lines.end() - shown; line != lines.end(); ++line, top += font.cellHeight())
-        drawText(canvas, font, layout.log.left, top, line->text, defaultPalette().forKind(line->kind),
-                 Weight::kRegular, layout.logCols);
+        font.draw(canvas, layout.log.left, top, line->text, defaultPalette().forKind(line->kind), Weight::kRegular,
+                  layout.logCols);
 }
 
 void drawBar(Canvas& canvas, const Rect& bar, int progress) {
@@ -162,21 +178,53 @@ void drawImage(Canvas& canvas, const Image& image, int x0, int y0) {
         }
 }
 
+size_t glyphCount() {
+    size_t count = 0;
+    for (const GlyphRange& range : kGlyphRanges) count += range.last - range.first + 1;
+    return count;
+}
+
+std::optional<int> glyphIndex(char32_t code) {
+    int offset = 0;
+    for (const GlyphRange& range : kGlyphRanges) {
+        if (code >= range.first && code <= range.last) return offset + static_cast<int>(code - range.first);
+        offset += static_cast<int>(range.last - range.first + 1);
+    }
+    return std::nullopt;
+}
+
+std::u32string decodeUtf8(std::string_view utf8) {
+    std::u32string out;
+    out.reserve(utf8.size());
+    while (!utf8.empty()) {
+        const auto [code, length] = decodeOne(utf8);
+        out.push_back(code);
+        utf8.remove_prefix(length);
+    }
+    return out;
+}
+
 std::optional<Font> Font::fromStrip(GrayImage strip, int scale) {
-    const bool layoutOk = strip.width > 0 && strip.width % kGlyphCount == 0 && strip.height > 0 && strip.height % 2 == 0;
+    const int count = static_cast<int>(glyphCount());
+    const bool layoutOk = strip.width > 0 && strip.width % count == 0 && strip.height > 0 && strip.height % 2 == 0;
     const bool sizeOk = strip.gray.size() == static_cast<size_t>(strip.width) * strip.height;
     if (!layoutOk || !sizeOk || scale < 1) return std::nullopt;
     return Font(std::move(strip), scale);
 }
 
 Font::Font(GrayImage strip, int scale)
-    : strip_(std::move(strip)), scale_(scale), glyphWidth_(strip_.width / kGlyphCount), glyphHeight_(strip_.height / 2) {}
+    : strip_(std::move(strip)),
+      scale_(scale),
+      glyphWidth_(strip_.width / static_cast<int>(glyphCount())),
+      glyphHeight_(strip_.height / 2) {}
 
 void Font::draw(Canvas& canvas, int x, int top, std::string_view text, Rgb color, Weight weight, int maxCols) const {
     const int row = weight == Weight::kBold ? 1 : 0;
-    const size_t count = std::min(text.size(), static_cast<size_t>(std::max(maxCols, 0)));
+    const std::u32string codes = decodeUtf8(text);
+    const size_t count = std::min(codes.size(), static_cast<size_t>(std::max(maxCols, 0)));
+    const int missing = *glyphIndex(kMissingGlyph);
     for (size_t i = 0; i < count && x < canvas.width(); ++i, x += cellWidth())
-        drawGlyph(canvas, x, top, glyphIndex(text[i]), row, color);
+        drawGlyph(canvas, x, top, glyphIndex(codes[i]).value_or(missing), row, color);
 }
 
 void Font::drawGlyph(Canvas& canvas, int x, int top, int glyph, int row, Rgb color) const {
@@ -189,17 +237,6 @@ void Font::drawGlyph(Canvas& canvas, int x, int top, int glyph, int row, Rgb col
                     canvas.blend(x + gx * scale_ + sx, top + gy * scale_ + sy, color, coverage[gx]);
         }
     }
-}
-
-std::string foldToAscii(std::string_view utf8) {
-    std::string out;
-    out.reserve(utf8.size());
-    for (size_t i = 0; i < utf8.size();) {
-        const size_t length = std::min(sequenceLength(static_cast<uint8_t>(utf8[i])), utf8.size() - i);
-        out.push_back(foldSequence(utf8.substr(i, length)));
-        i += length;
-    }
-    return out;
 }
 
 FontChoice chooseFont(int width, int height, float density, const std::vector<int>& cellHeights) {

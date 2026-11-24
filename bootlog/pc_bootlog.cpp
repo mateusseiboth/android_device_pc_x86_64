@@ -58,7 +58,7 @@ using android::SurfaceComposerClient;
 using namespace std::chrono_literals;
 
 constexpr char kAssets[] = "/system_ext/etc/pc-bootlog/";
-constexpr const char* kFontFiles[] = {"font-12x22.png", "font-18x32.png"};
+constexpr const char* kFontFiles[] = {"font-12x22.png", "font-17x32.png"};
 constexpr char kLogoFile[] = "logo.png";
 constexpr char kStockAnimation[] = "/system/bin/bootanimation";
 constexpr char kLogcat[] = "/system/bin/logcat";

@@ -1,3 +1,6 @@
-12x22.png and 18x32.png are AOSP recovery's font images (bootable/recovery/fonts), copied unchanged.
-They were generated from the font Inconsolata, released under the SIL Open Font License (OFL.txt).
-Layout: the 96 characters 0x20..0x7f side by side, regular on the top row and bold on the bottom one.
+font-12x22.png and font-17x32.png are glyph strips rasterized by make_font.py from DroidSansMono.ttf
+(frameworks/base/data/fonts, Copyright The Android Open Source Project, Apache License 2.0: NOTICE).
+Layout: ASCII 0x20..0x7e then Latin-1 0xa0..0xff side by side, regular on the top row and bold on the
+bottom one. Regenerate with:
+
+    for h in 22 32; do python3 make_font.py $ANDROID_BUILD_TOP/frameworks/base/data/fonts/DroidSansMono.ttf $h .; done
