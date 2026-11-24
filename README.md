@@ -15,6 +15,7 @@ an existing partition and booted through GRUB, in the spirit of Android-x86 and 
 | Installer | `PcInstaller` app + `pc-installd` root service ([packages/apps/PcInstaller](https://github.com/mateusseiboth/android_packages_apps_PcInstaller)), UEFI and BIOS, install, update (also from a USB drive on an installed system) and removal; GRUB's BIOS boot sector checked in QEMU, Android not yet booted |
 | Desktop UI | [vendor/pc/ui](https://github.com/mateusseiboth/android_vendor_pc_ui) + `pc` branches of frameworks/base and Launcher3 — not yet built |
 | Linux terminal | AVF (`com.android.virt`, crosvm, Terminal app) on KVM, non-protected VMs — not yet built |
+| Boot log | `pc-bootlog`: the live log as a terminal instead of the boot animation; host tests pass, not yet built |
 
 ## Sources
 
@@ -124,6 +125,40 @@ private platform domains that vendor policy cannot name, so anything they need b
 example the GPU render node when a VM uses a GPU backend other than `2d`) goes into system_ext private
 policy (`SYSTEM_EXT_PRIVATE_SEPOLICY_DIRS`).
 
+## Boot log
+
+The boot animation is a terminal showing the live log (`logcat -b all`: kernel, main, system, events),
+colored by priority, with the time since boot, the current stage, a progress bar driven by the
+`boot_progress_*` events and the logo in the corner. It is the native version of the projector boot log
+it comes from (see Credits): C++ drawing on the CPU into a SurfaceFlinger layer, so the log shows as soon
+as SurfaceFlinger is up, with no Java VM competing with zygote.
+
+- `bootlog/pc-bootlog.rc` overrides frameworks/base's `bootanim` service with `/system_ext/bin/pc-bootlog`.
+  SurfaceFlinger starts that service with `ctl.start` after setting `service.bootanim.exit=0`, and
+  WindowManager sets the property to 1 and waits for the service to stop before turning the screen on;
+  nothing else changes. The override lives on system_ext because init refuses a vendor file overriding a
+  system service.
+- It runs as user `graphics` with the `log` group (logd hands every buffer to that group; no root) in the
+  `bootanim` domain: `sepolicy/private` (system_ext private policy) labels the binary `bootanim_exec`,
+  lets the domain read the log (`read_logd`) and run the stock animation.
+- The drawing runs in a child process. When it cannot draw (no display, no font, no surface) or dies
+  before the boot asked the animation to leave, the service process runs the stock
+  `/system/bin/bootanimation` in its place, keeping the pid WindowManager watches.
+- It leaves when `service.bootanim.exit` goes from 0 to 1 or when `boot_progress_enable_screen` shows up
+  in the log; it never holds the boot. A 10-minute guard hands over to the stock animation.
+- Text: AOSP recovery's Inconsolata glyph images (`bootlog/font/`), 12x22 or 18x32 at an integer scale,
+  picked for about 48 rows on the short side of the screen, or larger on a dense display. 1080p shows a
+  158x45 terminal. Stage names in Brazilian Portuguese or English, from `persist.sys.locale`
+  (`ro.product.locale` before the user picks one).
+- Logo: `bootlog/logo.png`, scaled once at boot to a fifth of the short side; the terminal's purple and
+  orange come from it.
+- `androidboot.pc.bootlog=0` on the kernel command line runs the stock animation instead.
+- `adb shell /system_ext/bin/pc-bootlog --test` draws for 15 s over the running system.
+
+The model and the drawing (`bootlog_model.*`, `bootlog_render.*`) have no Android dependencies:
+`bootlog/test_bootlog.py` builds their gtest suite with the host compiler, using the tree's
+`external/googletest` (outside the tree, set `ANDROID_BUILD_TOP`); in the build it is `pc-bootlog-test`.
+
 ## Tree
 
 | Path | What |
@@ -135,10 +170,11 @@ policy (`SYSTEM_EXT_PRIVATE_SEPOLICY_DIRS`).
 | `gbm_mesa_wrapper/` | builds minigbm's wrapper around Mesa's GBM |
 | `rootdir/` | `init.pc.rc`, `ueventd.rc` |
 | `terminal/` | Linux terminal: KVM detection (`pc-hypervisor.sh`) and default permissions |
+| `bootlog/` | `pc-bootlog`, the boot animation that shows the live log |
 | `audio/`, `wifi/`, `camera/` | HAL configuration |
-| `sepolicy/` | vendor policy (SELinux is permissive while it is completed) |
+| `sepolicy/` | vendor policy, and system_ext private policy in `sepolicy/private` (SELinux is permissive while it is completed) |
 
-Tests: `python3 -m unittest` in `kernel/`, `initrd/`, `iso/`, `vulkan/` and `terminal/`.
+Tests: `python3 -m unittest` in `kernel/`, `initrd/`, `iso/`, `vulkan/`, `terminal/` and `bootlog/`.
 
 ## Credits
 
@@ -151,6 +187,9 @@ Tests: `python3 -m unittest` in `kernel/`, `initrd/`, `iso/`, `vulkan/` and `ter
 - [GloDroid](https://github.com/GloDroid): aospext (Mesa built inside the Android build) and minigbm's gbm_mesa backend.
 - The [Android Virtualization Framework](https://source.android.com/docs/core/virtualization) and [crosvm](https://crosvm.dev): the Linux terminal and its VM.
 - AOSP Cuttlefish: `audio/primary_audio_policy_configuration.xml` comes from [device/google/cuttlefish](https://android.googlesource.com/device/google/cuttlefish).
+- The boot log comes from Mateus Seiboth's projector boot log, [hy300-rk3566/android/bootlog](https://github.com/mateusseiboth/hy300-rk3566/tree/main/android/bootlog): its log model, stages and look, ported here to its native version.
+  - Logo: capybara artwork by Mateus Seiboth.
+  - `bootlog/font/` holds AOSP recovery's [font images](https://android.googlesource.com/platform/bootable/recovery/+/refs/heads/main/fonts), made from [Inconsolata](https://levien.com/type/myfonts/inconsolata.html) by Raph Levien (SIL Open Font License, `bootlog/font/OFL.txt`).
 - [Mesa](https://mesa3d.org), [minigbm](https://chromium.googlesource.com/chromiumos/platform/minigbm) (ChromiumOS), [drm_hwcomposer](https://gitlab.freedesktop.org/drm/hwcomposer), [linux-firmware](https://gitlab.com/kernel-firmware/linux-firmware), the [Linux kernel](https://kernel.org) and [Fedora](https://fedoraproject.org)'s kernel configuration, used as the base of `kernel/fedora-7.2.config`.
 
 Thanks to everyone behind these projects. Files taken from them keep their original licenses and copyright notices.
