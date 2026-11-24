@@ -91,3 +91,17 @@ live ISO uses `pc.id=live`, so a USB stick and an installed system never boot ea
 | `sepolicy/` | vendor policy (SELinux is permissive while it is completed) |
 
 Tests: `python3 -m unittest` in `kernel/`, `initrd/`, `iso/` and `vulkan/`.
+
+## Credits
+
+- [LineageOS](https://lineageos.org) ([GitHub](https://github.com/LineageOS)): the base system and build this is part of.
+- [Android Open Source Project](https://source.android.com): the platform, its APIs and build system.
+- [BlissOS](https://blissos.org) ([GitHub](https://github.com/BlissOS)) and the [Android-Generic Project](https://github.com/android-generic): the approach to running Android on PCs that this project follows.
+  - `camera/external_camera_config.xml` comes from BlissOS's [device/generic/common](https://github.com/BlissOS/device_generic_common).
+  - The [minigbm](https://github.com/mateusseiboth/android_external_minigbm) and [aospext](https://github.com/mateusseiboth/android_glodroid_aospext) forks come from android-generic.
+- [Android-x86](https://www.android-x86.org): the original Android-on-PC work, including installing into a folder and booting through GRUB.
+- [GloDroid](https://github.com/GloDroid): aospext (Mesa built inside the Android build) and minigbm's gbm_mesa backend.
+- AOSP Cuttlefish: `audio/primary_audio_policy_configuration.xml` comes from [device/google/cuttlefish](https://android.googlesource.com/device/google/cuttlefish).
+- [Mesa](https://mesa3d.org), [minigbm](https://chromium.googlesource.com/chromiumos/platform/minigbm) (ChromiumOS), [drm_hwcomposer](https://gitlab.freedesktop.org/drm/hwcomposer), [linux-firmware](https://gitlab.com/kernel-firmware/linux-firmware), the [Linux kernel](https://kernel.org) and [Fedora](https://fedoraproject.org)'s kernel configuration, used as the base of `kernel/fedora-7.2.config`.
+
+Thanks to everyone behind these projects. Files taken from them keep their original licenses and copyright notices.
