@@ -52,8 +52,8 @@ PRODUCT_COPY_FILES += \
     device/pc/pc_x86_64/rootdir/ueventd.rc:$(TARGET_COPY_OUT_VENDOR)/etc/ueventd.rc
 
 # Firmware for GPUs, Wi-Fi, Bluetooth and the rest (the kernel loads the .xz/.zst files as they are).
-# PC_FIRMWARE_DIR: a linux-firmware tree, by default the build host's.
-PC_FIRMWARE_DIR ?= /lib/firmware
+# PC_FIRMWARE_DIR: a linux-firmware tree inside the source tree (kernel/stage_firmware.sh copies the host's).
+PC_FIRMWARE_DIR ?= vendor/pc/firmware
 PC_FIRMWARE_FILES := $(shell cd $(PC_FIRMWARE_DIR) 2>/dev/null && find . \( -type f -o -type l \) -printf '%P\n' | grep -v '[: ]')
 PRODUCT_COPY_FILES += \
     $(foreach f,$(PC_FIRMWARE_FILES),$(PC_FIRMWARE_DIR)/$(f):$(TARGET_COPY_OUT_VENDOR)/firmware/$(f))
