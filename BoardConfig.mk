@@ -47,6 +47,9 @@ SYSTEM_EXT_PRIVATE_SEPOLICY_DIRS += packages/apps/PcInstaller/installd/sepolicy/
 PC_KERNEL_OUT ?= out/kernel-pc
 PC_KERNEL_MODULES_DIR := $(firstword $(wildcard $(PC_KERNEL_OUT)/modules-install/lib/modules/*))
 BOARD_VENDOR_KERNEL_MODULES := $(if $(PC_KERNEL_MODULES_DIR),$(shell find $(PC_KERNEL_MODULES_DIR) -name '*.ko'))
+# modules_install already stripped and then signed them; stripping again would drop the signature that
+# Secure Boot requires.
+BOARD_DO_NOT_STRIP_VENDOR_MODULES := true
 
 # Some firmware blobs are ELF files.
 BUILD_BROKEN_ELF_PREBUILT_PRODUCT_COPY_FILES := true
