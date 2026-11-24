@@ -11,6 +11,8 @@
  *   pc.src=DIR      install folder, relative to the partition root (default: lineage)
  *   pc.live=1       keep user data in RAM (the live ISO)
  *   pc.previous=1   boot the system kept from before the last update (system.old.img / system.old/)
+ *   pc.id=ID        only accept a folder holding install-ID.id (written by the installer; the live ISO
+ *                   uses pc.id=live), so an installed system and the live USB stick never get mixed up
  *
  * Host test modes:
  *   pc-init --cmdline CMDLINE   print the parsed options
@@ -42,11 +44,13 @@ struct options {
 	char src[256];
 	int live;
 	int previous;
+	char id[64];
 };
 
 static void set_src(struct options *o, const char *v) { snprintf(o->src, sizeof o->src, "%s", v); }
 static void set_live(struct options *o, const char *v) { o->live = !strcmp(v, "1"); }
 static void set_previous(struct options *o, const char *v) { o->previous = !strcmp(v, "1"); }
+static void set_id(struct options *o, const char *v) { snprintf(o->id, sizeof o->id, "%s", v); }
 
 static const struct {
 	const char *key;
@@ -55,6 +59,7 @@ static const struct {
 	{ "pc.src=", set_src },
 	{ "pc.live=", set_live },
 	{ "pc.previous=", set_previous },
+	{ "pc.id=", set_id },
 };
 
 static void parse_cmdline(const char *cmdline, struct options *o)
@@ -120,9 +125,16 @@ static void find_data(const char *root, const struct options *o, struct plan *p)
 		snprintf(p->data, sizeof p->data, "%s/userdata", o->src);
 }
 
+static int has_id_file(const char *root, const struct options *o)
+{
+	char path[PATH_MAX * 2];
+	snprintf(path, sizeof path, "%s/%s/install-%s.id", root, o->src, o->id);
+	return !o->id[0] || is_file(path);
+}
+
 static int make_plan(const char *root, const struct options *o, struct plan *p)
 {
-	if (find_system(root, o, p))
+	if (!has_id_file(root, o) || find_system(root, o, p))
 		return -1;
 	find_data(root, o, p);
 	return 0;
@@ -326,7 +338,7 @@ static int print_cmdline(const char *cmdline)
 {
 	struct options o;
 	parse_cmdline(cmdline, &o);
-	printf("src=%s\nlive=%d\nprevious=%d\n", o.src, o.live, o.previous);
+	printf("src=%s\nlive=%d\nprevious=%d\nid=%s\n", o.src, o.live, o.previous, o.id);
 	return 0;
 }
 

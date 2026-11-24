@@ -16,6 +16,8 @@ TARGET_COPY_OUT_VENDOR := system/vendor
 TARGET_COPY_OUT_PRODUCT := system/product
 TARGET_COPY_OUT_SYSTEM_EXT := system/system_ext
 TARGET_USERIMAGES_USE_EXT4 := true
+# pc-init loop-mounts system.img as is, so it must be raw ext4, not Android's sparse format.
+TARGET_USERIMAGES_SPARSE_EXT_DISABLED := true
 BOARD_SYSTEMIMAGE_FILE_SYSTEM_TYPE := ext4
 BOARD_USERDATAIMAGE_PARTITION_SIZE := 4294967296
 BOARD_FLASH_BLOCK_SIZE := 512
