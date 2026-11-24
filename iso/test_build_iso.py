@@ -5,7 +5,7 @@ from pathlib import Path
 
 from datetime import datetime
 
-from build_iso import (BIOS_GRUB_PREFIX, BOOT_ENTRIES, INSTALL_GRUB_MODULES, INSTALL_GRUB_PREFIX, ISO_GRUB_MODULES,
+from build_iso import (loopback_cfg, BIOS_GRUB_PREFIX, BOOT_ENTRIES, INSTALL_GRUB_MODULES, INSTALL_GRUB_PREFIX, ISO_GRUB_MODULES,
                        LIVE_ID, bios_early_cfg, bios_eltorito_args, esp_image_commands, grub_bios_mkimage_args,
                        grub_cfg, grub_mkimage_args, is_android_sparse, iso_grub_early_cfg, iso_grub_mkimage_args,
                        iso_uuid, kernel_cmdline, live_id_file, make_stamp, xorriso_args)
@@ -160,6 +160,20 @@ class SparseImageTest(unittest.TestCase):
             raw.write_bytes(bytes(2048))
             self.assertTrue(is_android_sparse(sparse))
             self.assertFalse(is_android_sparse(raw))
+
+
+
+class LoopbackCfgTest(unittest.TestCase):
+    # Multiboot loaders (Ventoy's GRUB2 mode, Super GRUB2, grub's own loopback) boot an ISO file through
+    # boot/grub/loopback.cfg with ${iso_path} set; pc-init then finds the file by iso-scan/filename=.
+    def test_same_entries_with_the_iso_path(self):
+        cfg = loopback_cfg("lineage")
+        entries = [e for e in cfg.split("menuentry ")[1:] if "linux " in e]
+        self.assertEqual(len(entries), len(BOOT_ENTRIES))
+        self.assertTrue(all("iso-scan/filename=${iso_path}" in e for e in entries))
+
+    def test_the_plain_menu_has_no_iso_path(self):
+        self.assertNotIn("iso-scan/filename", grub_cfg("lineage"))
 
 
 if __name__ == "__main__":

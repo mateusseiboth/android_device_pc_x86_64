@@ -206,6 +206,13 @@ policy (`SYSTEM_EXT_PRIVATE_SEPOLICY_DIRS`).
 
 Tests: `python3 -m unittest` in `kernel/`, `initrd/`, `iso/`, `secureboot/`, `vulkan/` and `terminal/`; `secureboot/sb_boot_test.py` boots an ISO in QEMU.
 
+## Multiboot sticks (Ventoy)
+
+The ISO also boots as a file on a multiboot stick. In Ventoy's normal mode pc-init looks for our ISO
+(volume label `LINEAGE_PC`) at the root and one folder down of every partition, loop-mounts it and
+boots the folder inside. Loaders that boot ISOs through `boot/grub/loopback.cfg` (Ventoy's GRUB2 mode,
+Super GRUB2 and the like) pass `iso-scan/filename=${iso_path}` instead, naming the file directly.
+
 ## Credits
 
 - [LineageOS](https://lineageos.org) ([GitHub](https://github.com/LineageOS)): the base system and build this is part of.

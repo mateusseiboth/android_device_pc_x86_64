@@ -83,15 +83,21 @@ def kernel_cmdline(folder, extra):
     return ' '.join(filter(None, [BASE_CMDLINE, f'pc.src={folder}', extra]))
 
 
-def grub_cfg(folder):
+def grub_cfg(folder, extra_args=''):
     menu = ''.join(
         f'menuentry "{title}" {{\n'
-        f'    linux /{folder}/kernel {kernel_cmdline(folder, extra)}\n'
+        f'    linux /{folder}/kernel {kernel_cmdline(folder, " ".join(filter(None, [extra, extra_args])))}\n'
         f'    initrd /{folder}/initrd.img\n'
         f'}}\n\n'
         for title, extra in BOOT_ENTRIES)
     help_entry = f'menuentry "{HELP_ENTRY}" {{\n    cat /{folder}/{HELP_NAME}\n}}\n'
     return 'set timeout=5\nset default=0\n\n' + menu + help_entry
+
+
+def loopback_cfg(folder):
+    """boot/grub/loopback.cfg: the menu for loaders that boot the ISO as a file (Ventoy's GRUB2 mode and
+    others set ${iso_path}); pc-init finds that file through iso-scan/filename=."""
+    return grub_cfg(folder, 'iso-scan/filename=${iso_path}')
 
 
 def live_id_file(folder):
@@ -282,6 +288,7 @@ def main():
         build_bios_grub(tree / FOLDER / BIOS_GRUB_DIR, work)
         build_bios_eltorito(tree)
         (tree / 'boot/grub/grub.cfg').write_text(grub_cfg(FOLDER))
+        (tree / 'boot/grub/loopback.cfg').write_text(loopback_cfg(FOLDER))
         subprocess.run(xorriso_args(a.out, tree, stamp), check=True, capture_output=True)
     finally:
         shutil.rmtree(work)
