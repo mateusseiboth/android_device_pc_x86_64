@@ -12,7 +12,7 @@ an existing partition and booted through GRUB, in the spirit of Android-x86 and 
 | Graphics | Mesa (radeonsi, iris, crocus, r600, nouveau, virgl, softpipe; RADV, ANV, venus), minigbm on Mesa's GBM, drm_hwcomposer — integrating |
 | Boot | `pc-init` initrd (folder install, live ISO) — not yet booted |
 | HALs | AOSP software HALs, AIDL audio over ALSA, Wi-Fi (nl80211), Bluetooth, USB cameras — not yet booted |
-| Installer | `PcInstaller` app + `pc-installd` root service ([packages/apps/PcInstaller](https://github.com/mateusseiboth/android_packages_apps_PcInstaller)), UEFI only; not yet booted |
+| Installer | `PcInstaller` app + `pc-installd` root service ([packages/apps/PcInstaller](https://github.com/mateusseiboth/android_packages_apps_PcInstaller)), UEFI and BIOS, install, update (also from a USB drive on an installed system) and removal; GRUB's BIOS boot sector checked in QEMU, Android not yet booted |
 | Desktop UI | [vendor/pc/ui](https://github.com/mateusseiboth/android_vendor_pc_ui) + `pc` branches of frameworks/base and Launcher3 — not yet built |
 
 ## Sources
@@ -68,8 +68,11 @@ and copy both binaries to `prebuilts/mesa-build-deps/`, which aospext puts on th
     install-<id>.id   written by the installer; GRUB and pc-init find the folder by it
 ```
 
-The installer puts GRUB in `EFI/LineageOS/` on the ESP (`grubx64.efi` from the ISO plus a generated
-`grub.cfg`), adds a UEFI boot entry, and fills `EFI/BOOT/BOOTX64.EFI` only when it is empty.
+On UEFI the installer puts GRUB in `EFI/LineageOS/` on the ESP (`grubx64.efi` from the ISO), adds a UEFI
+boot entry, and fills `EFI/BOOT/BOOTX64.EFI` only when it is empty. On BIOS it writes `grub-pc/boot.img` to
+the disk's first sector and `grub-pc/core.img` before the first partition (a GPT BIOS boot partition, the GPT
+gap or the MBR gap), and keeps GRUB's modules and menu in `pc-grub/` on the install's partition. Every menu
+lists every install on the computer plus the other systems it finds (Windows, other Linux).
 
 Kernel command line: `pc.src=<folder>` (default `lineage`), `pc.live=1` (data in RAM),
 `pc.previous=1` (boot the previous system), `pc.id=<id>` (only a folder holding `install-<id>.id`; the
@@ -83,7 +86,7 @@ live ISO uses `pc.id=live`, so a USB stick and an installed system never boot ea
 |---|---|
 | `kernel/` | kernel config fragments, `kconfig.py` (merge/check against android-base.config), build and firmware scripts |
 | `initrd/` | `pc_init.c`, the initrd's `/init` |
-| `iso/` | `build_iso.py`: live ISO (BIOS and UEFI); also builds the installed system's `grubx64.efi` |
+| `iso/` | `build_iso.py`: live ISO (BIOS and UEFI); also builds the installed system's GRUB (`grubx64.efi`, and `grub-pc/` for BIOS) |
 | `vulkan/` | `vulkan.pc`: picks the Mesa Vulkan driver from the GPU's DRM driver |
 | `gbm_mesa_wrapper/` | builds minigbm's wrapper around Mesa's GBM |
 | `rootdir/` | `init.pc.rc`, `ueventd.rc` |
