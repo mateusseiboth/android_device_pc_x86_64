@@ -1,0 +1,17 @@
+// Vulkan HAL for PCs: picks the Mesa driver of the GPU at run time (see vulkan_pc.c).
+cc_library_shared {
+    name: "vulkan.pc",
+    vendor: true,
+    relative_install_path: "hw",
+    srcs: ["vulkan_pc.c"],
+    cflags: ["-Wall", "-Wextra", "-Werror"],
+    header_libs: [
+        "hwvulkan_headers",
+        "libhardware_headers",
+    ],
+    shared_libs: [
+        "libdl",
+        "libdrm",
+        "liblog",
+    ],
+}

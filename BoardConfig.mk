@@ -47,3 +47,7 @@ BOARD_VENDOR_KERNEL_MODULES := $(if $(PC_KERNEL_MODULES_DIR),$(shell find $(PC_K
 
 # Some firmware blobs are ELF files.
 BUILD_BROKEN_ELF_PREBUILT_PRODUCT_COPY_FILES := true
+
+# Wi-Fi: any nl80211 driver through wpa_supplicant (no vendor HAL, no private driver library).
+WPA_SUPPLICANT_VERSION := VER_0_8_X
+BOARD_WPA_SUPPLICANT_DRIVER := NL80211
