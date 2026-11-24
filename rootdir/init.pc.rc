@@ -5,6 +5,22 @@ on fs
     # for fs_mgr to mount and /data is not encrypted.
     setprop ro.crypto.state unsupported
 
+# Linux terminal (AVF): non-protected VMs on KVM, when VT-x/AMD-V is enabled (pc-hypervisor.sh). An
+# androidboot.hypervisor.* argument on the kernel command line is set first and wins.
+on post-fs
+    setprop ro.boot.hypervisor.protected_vm.supported false
+    exec_start pc-hypervisor
+
+on property:vendor.pc.kvm=true
+    setprop ro.boot.hypervisor.vm.supported true
+    setprop hypervisor.memory_reclaim.supported true
+
+service pc-hypervisor /vendor/bin/pc-hypervisor.sh
+    user system
+    group system
+    oneshot
+    disabled
+
 # Wi-Fi without a vendor HAL: the framework starts the supplicant on wlan0 (nl80211).
 service wpa_supplicant /vendor/bin/hw/wpa_supplicant -iwlan0 -Dnl80211 \
         -c/vendor/etc/wifi/wpa_supplicant.conf -O/data/vendor/wifi/wpa/sockets -dd -g@android:wpa_wlan0

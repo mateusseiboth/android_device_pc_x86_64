@@ -115,3 +115,13 @@ PRODUCT_COPY_FILES += \
 PRODUCT_PACKAGES += \
     PcInstaller \
     pc-installd
+
+# Linux terminal: AVF (com.android.virt with crosvm, virtmgr and VmTerminalApp) running non-protected VMs
+# on KVM; there is no pKVM on a PC, so no protected VMs and no remote attestation (it needs them).
+# pc-hypervisor.sh sets ro.boot.hypervisor.vm.supported when KVM works (init.pc.rc). The terminal is
+# turned on in Developer options > Linux development environment.
+$(call inherit-product, packages/modules/Virtualization/build/apex/product_packages.mk)
+PRODUCT_AVF_REMOTE_ATTESTATION_DISABLED := true
+PRODUCT_PACKAGES += \
+    pc-hypervisor.sh \
+    pc-terminal-default-permissions.xml

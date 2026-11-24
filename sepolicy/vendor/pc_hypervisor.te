@@ -1,0 +1,13 @@
+# pc-hypervisor.sh: reports whether the kernel registered the kvm misc device (VT-x/AMD-V enabled).
+type pc_hypervisor, domain;
+type pc_hypervisor_exec, exec_type, vendor_file_type, file_type;
+
+init_daemon_domain(pc_hypervisor)
+
+allow pc_hypervisor vendor_shell_exec:file rx_file_perms;
+allow pc_hypervisor vendor_toolbox_exec:file rx_file_perms;
+
+# /sys/class/misc/kvm, a link into /sys/devices/virtual/misc. /dev/kvm stays crosvm's alone.
+r_dir_file(pc_hypervisor, sysfs)
+
+set_prop(pc_hypervisor, vendor_pc_kvm_prop)

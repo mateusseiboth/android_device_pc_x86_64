@@ -1,0 +1,2 @@
+# Set by pc-hypervisor.sh when KVM works; init.pc.rc turns it into ro.boot.hypervisor.vm.supported.
+vendor.pc.kvm u:object_r:vendor_pc_kvm_prop:s0 exact bool

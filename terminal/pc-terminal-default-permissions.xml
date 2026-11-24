@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Linux terminal reaches its VM over the local network and shows the VM's state in a
+     notification; both are granted up front, and the user can still revoke them. -->
+<exceptions>
+    <exception package="com.android.virtualization.terminal">
+        <permission name="android.permission.ACCESS_LOCAL_NETWORK" fixed="false" />
+        <permission name="android.permission.POST_NOTIFICATIONS" fixed="false" />
+    </exception>
+</exceptions>
