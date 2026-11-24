@@ -19,3 +19,22 @@ TARGET_USERIMAGES_USE_EXT4 := true
 BOARD_SYSTEMIMAGE_FILE_SYSTEM_TYPE := ext4
 BOARD_USERDATAIMAGE_PARTITION_SIZE := 4294967296
 BOARD_FLASH_BLOCK_SIZE := 512
+
+# Graphics: Mesa built from external/mesa3d by GloDroid's aospext (glodroid/aospext). radeonsi and RADV
+# compile every shader with ACO (no LLVM in the image); the Intel drivers precompile their OpenCL
+# shaders with the host's mesa_clc/vtn_bindgen2 (prebuilts/mesa-build-deps, see README).
+BOARD_BUILD_AOSPEXT_MESA3D := true
+BOARD_MESA3D_SRC_DIR := external/mesa3d
+BOARD_MESA3D_GALLIUM_DRIVERS := radeonsi r600 iris crocus nouveau virgl softpipe
+BOARD_MESA3D_VULKAN_DRIVERS := amd intel intel_hasvk virtio
+BOARD_MESA3D_BUILD_LIBGBM := true
+BOARD_MESA3D_AMD_USE_LLVM := false
+BOARD_MESA3D_GALLIUM_VA := disabled
+BOARD_MESA3D_MESON_ARGS := \
+    -Damd-use-llvm=false \
+    -Dmesa-clc=system \
+    -Dprecomp-compiler=system \
+    -Dintel-rt=disabled \
+    -Dallow-kcmp=enabled
+
+BOARD_VENDOR_SEPOLICY_DIRS += device/pc/pc_x86_64/sepolicy/vendor
