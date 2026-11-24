@@ -125,3 +125,10 @@ PRODUCT_AVF_REMOTE_ATTESTATION_DISABLED := true
 PRODUCT_PACKAGES += \
     pc-hypervisor.sh \
     pc-terminal-default-permissions.xml
+
+# Desktop apps: task manager, diagnostics (also Settings > About hardware rows), text editor, viewer.
+PRODUCT_PACKAGES += \
+    PcTaskManager \
+    PcDiagnostics \
+    PcTextEditor \
+    PcViewer

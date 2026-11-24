@@ -1,4 +1,6 @@
 # LineageOS for x86_64 PCs (BIOS/UEFI, installed into a folder and booted through GRUB).
+# The PC starts on a login screen (headless system user mode); pc_login.mk must come first.
+$(call inherit-product, vendor/pc/ui/pc_login.mk)
 $(call inherit-product, $(SRC_TARGET_DIR)/product/core_64_bit.mk)
 $(call inherit-product, $(SRC_TARGET_DIR)/product/full_base.mk)
 $(call inherit-product, device/pc/pc_x86_64/device.mk)
