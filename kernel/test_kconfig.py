@@ -1,6 +1,9 @@
 import unittest
+from pathlib import Path
 
-from kconfig import find_unmet, merge, parse_config, render
+from kconfig import find_unmet, merge, parse_config, read, render, signing_fragment
+
+HERE = Path(__file__).resolve().parent
 
 
 class ParseConfigTest(unittest.TestCase):
@@ -40,6 +43,21 @@ class FindUnmetTest(unittest.TestCase):
 
     def test_values_must_match(self):
         self.assertEqual(find_unmet({'CONFIG_A': 'y', 'CONFIG_N': '4'}, {'CONFIG_A': 'y', 'CONFIG_N': '4'}), [])
+
+
+class ModuleSigningTest(unittest.TestCase):
+    # With Secure Boot on, IMA's architecture policy makes the kernel refuse unsigned modules
+    # (module.sig_enforce=Y), and Android's ueventd loads every driver as a module.
+    def test_modules_are_signed_at_install_and_unsigned_ones_still_load_without_secure_boot(self):
+        pc = read(HERE / 'pc.config')
+        self.assertEqual(pc['CONFIG_MODULE_SIG'], 'y')
+        self.assertEqual(pc['CONFIG_MODULE_SIG_ALL'], 'y')
+        self.assertIsNone(pc['CONFIG_MODULE_SIG_FORCE'])
+
+    def test_the_signing_key_comes_from_the_builders_key_directory(self):
+        self.assertNotIn('CONFIG_MODULE_SIG_KEY', read(HERE / 'pc.config'))
+        self.assertEqual(signing_fragment('/keys/pc-secureboot.pem'),
+                         {'CONFIG_MODULE_SIG_KEY': '"/keys/pc-secureboot.pem"'})
 
 
 if __name__ == '__main__':

@@ -4,6 +4,7 @@
   kconfig.py merge OUT BASE [FRAGMENT...]   BASE with each fragment applied in order (later wins)
   kconfig.py check REQUIRED CONFIG [IGNORED] list what CONFIG misses from REQUIRED (exit 1 if any),
                                             skipping the option names listed in IGNORED
+  kconfig.py signing OUT PEM                a fragment that signs modules with PEM (key + certificate)
 
 REQUIRED is Android's android-base.config: options that must be built in (=y) or must stay unset.
 """
@@ -41,6 +42,10 @@ def find_unmet(required, actual, ignored=frozenset()):
             if name not in ignored and actual.get(name) != wanted]
 
 
+def signing_fragment(pem):
+    return {'CONFIG_MODULE_SIG_KEY': f'"{pem}"'}
+
+
 def read_names(path):
     return {line.split('#')[0].strip() for line in open(path)} - {''}
 
@@ -63,7 +68,13 @@ def run_check(required, config, ignored_list=None):
     return 1 if unmet else 0
 
 
-COMMANDS = {'merge': run_merge, 'check': run_check}
+def run_signing(out, pem):
+    with open(out, 'w') as f:
+        f.write(render(signing_fragment(pem)))
+    return 0
+
+
+COMMANDS = {'merge': run_merge, 'check': run_check, 'signing': run_signing}
 
 
 if __name__ == '__main__':
