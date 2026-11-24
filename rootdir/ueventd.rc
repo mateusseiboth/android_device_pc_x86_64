@@ -1,0 +1,7 @@
+# Load the driver for every device the kernel finds (modules.alias in /vendor/lib/modules).
+modalias_handling enabled
+
+/dev/dri/*                0666   system     graphics
+/dev/kfd                  0666   system     graphics
+/dev/uinput               0660   system     bluetooth
+/dev/rfkill               0660   bluetooth  bluetooth

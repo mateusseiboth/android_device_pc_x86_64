@@ -1,0 +1,10 @@
+# LineageOS for PCs (androidboot.hardware=pc).
+
+on fs
+    # pc-init (the initrd) mounted the system and /data before Android started; there is nothing left
+    # for fs_mgr to mount and /data is not encrypted.
+    setprop ro.crypto.state unsupported
+
+on early-boot
+    # Firmware for GPUs, Wi-Fi and Bluetooth lives next to the modules.
+    write /sys/module/firmware_class/parameters/path /vendor/firmware
