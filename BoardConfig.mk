@@ -38,3 +38,12 @@ BOARD_MESA3D_MESON_ARGS := \
     -Dallow-kcmp=enabled
 
 BOARD_VENDOR_SEPOLICY_DIRS += device/pc/pc_x86_64/sepolicy/vendor
+
+# Kernel modules from kernel/build_kernel.sh (KERNEL_OUT, default out/kernel-pc), installed in
+# /vendor/lib/modules with modules.dep/alias so ueventd loads every driver on demand.
+PC_KERNEL_OUT ?= out/kernel-pc
+PC_KERNEL_MODULES_DIR := $(firstword $(wildcard $(PC_KERNEL_OUT)/modules-install/lib/modules/*))
+BOARD_VENDOR_KERNEL_MODULES := $(if $(PC_KERNEL_MODULES_DIR),$(shell find $(PC_KERNEL_MODULES_DIR) -name '*.ko'))
+
+# Some firmware blobs are ELF files.
+BUILD_BROKEN_ELF_PREBUILT_PRODUCT_COPY_FILES := true
