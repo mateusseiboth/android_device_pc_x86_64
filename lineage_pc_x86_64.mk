@@ -10,3 +10,6 @@ PRODUCT_DEVICE := pc_x86_64
 PRODUCT_BRAND := LineageOS
 PRODUCT_MODEL := PC
 PRODUCT_MANUFACTURER := Generic
+
+# Local-only additions for personal test builds (never published); skipped when the folder is absent.
+$(call inherit-product-if-exists, vendor/gbos-local/gbos_local.mk)
