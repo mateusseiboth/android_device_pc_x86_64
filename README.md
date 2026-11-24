@@ -21,16 +21,18 @@ Sync LineageOS 24.0 and add `.repo/local_manifests/pc.xml`:
 
 ```xml
 <manifest>
-  <remote name="ag-github" fetch="https://github.com/android-generic" />
+  <remote name="pc" fetch="https://github.com/mateusseiboth" />
   <remove-project name="platform/external/minigbm" />
-  <project path="external/minigbm" name="external_minigbm" remote="ag-github" revision="14-x86" />
-  <project path="glodroid/aospext" name="glodroid_aospext" remote="ag-github" revision="main" />
+  <project path="external/minigbm" name="android_external_minigbm" remote="pc" revision="lineage-24.0" />
+  <project path="glodroid/aospext" name="android_glodroid_aospext" remote="pc" revision="lineage-24.0" />
+  <project path="device/pc/pc_x86_64" name="android_device_pc_x86_64" remote="pc" revision="lineage-24.0" />
 </manifest>
 ```
 
-minigbm and aospext carry local changes (branch `pc`; forks to come): minigbm keeps GloDroid's
-sources with Android 17's build files plus AIDL/stable-C `gbm_mesa` variants; aospext builds radeonsi
-without LLVM and only pulls libva when VA is enabled.
+Forks: [minigbm](https://github.com/mateusseiboth/android_external_minigbm) keeps GloDroid's sources
+(from android-generic) with Android 17's build files plus AIDL/stable-C `gbm_mesa` variants;
+[aospext](https://github.com/mateusseiboth/android_glodroid_aospext) builds radeonsi without LLVM and
+only pulls libva when VA is enabled.
 
 ## Build
 
