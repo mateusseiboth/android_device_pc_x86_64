@@ -1,5 +1,5 @@
 # Hardware-independent pieces of the PC build. Drivers, HALs and init come in later steps.
-PRODUCT_CHARACTERISTICS := tablet
+PRODUCT_CHARACTERISTICS := desktop
 PRODUCT_USE_DYNAMIC_PARTITION_SIZE := true
 
 # Soong analysis reads every Android.bp in the tree; skipping other platforms' trees keeps it within

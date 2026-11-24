@@ -13,7 +13,7 @@ an existing partition and booted through GRUB, in the spirit of Android-x86 and 
 | Boot | `pc-init` initrd (folder install, live ISO) — not yet booted |
 | HALs | AOSP software HALs, AIDL audio over ALSA, Wi-Fi (nl80211), Bluetooth, USB cameras — not yet booted |
 | Installer | `PcInstaller` app + `pc-installd` root service ([packages/apps/PcInstaller](https://github.com/mateusseiboth/android_packages_apps_PcInstaller)), UEFI only; not yet booted |
-| Desktop UI | planned: Googlebook/ChromeOS-like desktop on Launcher3/SystemUI |
+| Desktop UI | [vendor/pc/ui](https://github.com/mateusseiboth/android_vendor_pc_ui) + `pc` branches of frameworks/base and Launcher3 — not yet built |
 
 ## Sources
 
