@@ -28,6 +28,7 @@ PRODUCT_PACKAGES += \
     libgallium_dri \
     libgbm_mesa \
     dri_gbm \
+    libgbm_mesa_wrapper \
     vulkan.radeon \
     vulkan.intel \
     vulkan.intel_hasvk \
