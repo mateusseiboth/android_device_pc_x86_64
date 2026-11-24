@@ -16,6 +16,8 @@ mkdir -p "$OUT"
 python3 "$HERE/kconfig.py" merge "$OUT/.config" "$HERE/fedora-7.2.config" "$REQUIRED" "$HERE/pc.config"
 env PATH="$CLANG:$PATH" "${MAKE[@]}" olddefconfig >/dev/null
 python3 "$HERE/kconfig.py" check "$REQUIRED" "$OUT/.config" "$HERE/not-applicable.txt"
+# Our own fragment too: a dependency can silently turn a =y into =m.
+python3 "$HERE/kconfig.py" check "$HERE/pc.config" "$OUT/.config"
 [[ ${1:-all} == config ]] && exit 0
 env PATH="$CLANG:$PATH" "${MAKE[@]}" -j"$JOBS" bzImage modules
 rm -rf "$OUT/modules-install"
