@@ -12,7 +12,7 @@ an existing partition and booted through GRUB, in the spirit of Android-x86 and 
 | Graphics | Mesa (radeonsi, iris, crocus, r600, nouveau, virgl, softpipe; RADV, ANV, venus), minigbm on Mesa's GBM, drm_hwcomposer — integrating |
 | Boot | `pc-init` initrd (folder install, live ISO) — not yet booted |
 | HALs | AOSP software HALs, AIDL audio over ALSA, Wi-Fi (nl80211), Bluetooth, USB cameras — not yet booted |
-| Installer | planned: an app run from the live ISO |
+| Installer | `PcInstaller` app + `pc-installd` root service ([packages/apps/PcInstaller](https://github.com/mateusseiboth/android_packages_apps_PcInstaller)), UEFI only; not yet booted |
 | Desktop UI | planned: Googlebook/ChromeOS-like desktop on Launcher3/SystemUI |
 
 ## Sources
@@ -26,6 +26,7 @@ Sync LineageOS 24.0 and add `.repo/local_manifests/pc.xml`:
   <project path="external/minigbm" name="android_external_minigbm" remote="pc" revision="lineage-24.0" />
   <project path="glodroid/aospext" name="android_glodroid_aospext" remote="pc" revision="lineage-24.0" />
   <project path="device/pc/pc_x86_64" name="android_device_pc_x86_64" remote="pc" revision="lineage-24.0" />
+  <project path="packages/apps/PcInstaller" name="android_packages_apps_PcInstaller" remote="pc" revision="main" />
 </manifest>
 ```
 
@@ -64,10 +65,15 @@ and copy both binaries to `prebuilts/mesa-build-deps/`, which aospext puts on th
     system.img        or system/ (the image's files extracted)
     system.old.img    previous system after an update (or system.old/)
     data.img          or userdata/ (created on first boot)
+    install-<id>.id   written by the installer; GRUB and pc-init find the folder by it
 ```
 
+The installer puts GRUB in `EFI/LineageOS/` on the ESP (`grubx64.efi` from the ISO plus a generated
+`grub.cfg`), adds a UEFI boot entry, and fills `EFI/BOOT/BOOTX64.EFI` only when it is empty.
+
 Kernel command line: `pc.src=<folder>` (default `lineage`), `pc.live=1` (data in RAM),
-`pc.previous=1` (boot the previous system), plus `androidboot.hardware=pc` and
+`pc.previous=1` (boot the previous system), `pc.id=<id>` (only a folder holding `install-<id>.id`; the
+live ISO uses `pc.id=live`, so a USB stick and an installed system never boot each other), plus `androidboot.hardware=pc` and
 `firmware_class.path=/vendor/firmware`. The system image or folder must live on a Linux file system
 (ext4, f2fs, btrfs) when extracted; on NTFS/exFAT use `system.img` and `data.img`.
 
@@ -77,7 +83,7 @@ Kernel command line: `pc.src=<folder>` (default `lineage`), `pc.live=1` (data in
 |---|---|
 | `kernel/` | kernel config fragments, `kconfig.py` (merge/check against android-base.config), build and firmware scripts |
 | `initrd/` | `pc_init.c`, the initrd's `/init` |
-| `iso/` | `build_iso.py`: live ISO (BIOS and UEFI) |
+| `iso/` | `build_iso.py`: live ISO (BIOS and UEFI); also builds the installed system's `grubx64.efi` |
 | `vulkan/` | `vulkan.pc`: picks the Mesa Vulkan driver from the GPU's DRM driver |
 | `gbm_mesa_wrapper/` | builds minigbm's wrapper around Mesa's GBM |
 | `rootdir/` | `init.pc.rc`, `ueventd.rc` |

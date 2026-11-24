@@ -110,3 +110,8 @@ PRODUCT_PACKAGES += android.hardware.camera.provider-V1-external-service
 PRODUCT_COPY_FILES += \
     device/pc/pc_x86_64/camera/external_camera_config.xml:$(TARGET_COPY_OUT_VENDOR)/etc/external_camera_config.xml \
     frameworks/native/data/etc/android.hardware.camera.external.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.hardware.camera.external.xml
+
+# Installer, run from the live ISO: the PcInstaller app and its root service (packages/apps/PcInstaller).
+PRODUCT_PACKAGES += \
+    PcInstaller \
+    pc-installd
