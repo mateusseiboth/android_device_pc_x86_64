@@ -41,6 +41,8 @@ BOARD_MESA3D_MESON_ARGS := \
 
 BOARD_VENDOR_SEPOLICY_DIRS += device/pc/pc_x86_64/sepolicy/vendor
 SYSTEM_EXT_PRIVATE_SEPOLICY_DIRS += packages/apps/PcInstaller/installd/sepolicy/private
+# Platform-side policy of our own system_ext pieces (the boot log runs as bootanim).
+SYSTEM_EXT_PRIVATE_SEPOLICY_DIRS += device/pc/pc_x86_64/sepolicy/private
 
 # Kernel modules from kernel/build_kernel.sh (KERNEL_OUT, default out/kernel-pc), installed in
 # /vendor/lib/modules with modules.dep/alias so ueventd loads every driver on demand.

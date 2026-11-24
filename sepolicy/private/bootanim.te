@@ -1,0 +1,4 @@
+# pc-bootlog (bootlog/) is the boot animation: it reads every log buffer through logcat...
+read_logd(bootanim)
+# ...and, when it cannot draw, runs the stock /system/bin/bootanimation in the same process.
+allow bootanim bootanim_exec:file execute_no_trans;

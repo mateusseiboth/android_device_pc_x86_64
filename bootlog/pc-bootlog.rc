@@ -1,0 +1,16 @@
+# Boot log: the live log instead of the boot animation (device/pc/pc_x86_64/bootlog).
+# SurfaceFlinger starts "bootanim" with ctl.start after setting service.bootanim.exit=0;
+# WindowManager sets it to 1 and waits for the service to stop before it turns the screen on.
+# "override" replaces frameworks/base's /system/etc/init/bootanim.rc (system_ext is parsed after
+# system). The binary is labeled bootanim_exec (sepolicy/private), so it runs in the bootanim
+# domain like the stock animation, which it runs in its place when it cannot draw. The log group
+# lets logd hand it every log buffer without root.
+service bootanim /system_ext/bin/pc-bootlog
+    override
+    class core animation
+    user graphics
+    group graphics audio log
+    disabled
+    oneshot
+    ioprio rt 0
+    task_profiles MaxPerformance

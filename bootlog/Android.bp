@@ -1,0 +1,86 @@
+// Boot log: the boot animation shows the live log (logcat -b all) as a terminal. Ported from
+// https://github.com/mateusseiboth/hy300-rk3566/tree/main/android/bootlog (native version).
+// On system_ext: it uses libgui's platform API and its init file overrides frameworks/base's
+// "bootanim" service, which a vendor init file cannot (init refuses overrides across the Treble
+// boundary).
+
+cc_defaults {
+    name: "pc_bootlog_defaults",
+    cflags: [
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-Wunreachable-code",
+    ],
+}
+
+// Log model and CPU drawing, without Android dependencies (also built for the host tests).
+cc_library_static {
+    name: "libpc_bootlog",
+    host_supported: true,
+    defaults: ["pc_bootlog_defaults"],
+    srcs: [
+        "bootlog_model.cpp",
+        "bootlog_render.cpp",
+    ],
+    export_include_dirs: ["."],
+}
+
+cc_binary {
+    name: "pc-bootlog",
+    system_ext_specific: true,
+    defaults: ["pc_bootlog_defaults"],
+    srcs: ["pc_bootlog.cpp"],
+    static_libs: ["libpc_bootlog"],
+    shared_libs: [
+        "libbase",
+        "libbinder",
+        "libgui",
+        "liblog",
+        "libnativewindow",
+        "libpng",
+        "libui",
+        "libutils",
+    ],
+    init_rc: ["pc-bootlog.rc"],
+    required: [
+        "pc-bootlog-logo.png",
+        "pc-bootlog-font-12x22.png",
+        "pc-bootlog-font-17x32.png",
+    ],
+}
+
+prebuilt_etc {
+    name: "pc-bootlog-logo.png",
+    src: "logo.png",
+    filename: "logo.png",
+    sub_dir: "pc-bootlog",
+    system_ext_specific: true,
+}
+
+// Glyph strips (ASCII and Latin-1) rasterized from DroidSansMono by font/make_font.py; see font/README.
+prebuilt_etc {
+    name: "pc-bootlog-font-12x22.png",
+    src: "font/font-12x22.png",
+    filename: "font-12x22.png",
+    sub_dir: "pc-bootlog",
+    system_ext_specific: true,
+}
+
+prebuilt_etc {
+    name: "pc-bootlog-font-17x32.png",
+    src: "font/font-17x32.png",
+    filename: "font-17x32.png",
+    sub_dir: "pc-bootlog",
+    system_ext_specific: true,
+}
+
+cc_test_host {
+    name: "pc-bootlog-test",
+    defaults: ["pc_bootlog_defaults"],
+    srcs: [
+        "bootlog_model_test.cpp",
+        "bootlog_render_test.cpp",
+    ],
+    static_libs: ["libpc_bootlog"],
+}

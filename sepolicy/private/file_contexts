@@ -1,0 +1,2 @@
+# Boot log (bootlog/): runs as the boot animation.
+/(system_ext|system/system_ext)/bin/pc-bootlog    u:object_r:bootanim_exec:s0

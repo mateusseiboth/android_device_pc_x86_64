@@ -65,6 +65,9 @@ PRODUCT_COPY_FILES += \
     frameworks/native/data/etc/android.hardware.usb.host.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.hardware.usb.host.xml \
     frameworks/native/data/etc/android.software.freeform_window_management.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.software.freeform_window_management.xml
 
+# Boot log: the live log as a terminal instead of the boot animation (bootlog/, pc-bootlog.rc).
+PRODUCT_PACKAGES += pc-bootlog
+
 # Base HALs (software implementations from AOSP, as on the x86 emulators).
 PRODUCT_PACKAGES += \
     hwservicemanager \
