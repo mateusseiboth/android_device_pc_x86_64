@@ -1,0 +1,54 @@
+diff --git a/drivers/gpu/drm/virtio/virtgpu_display.c b/drivers/gpu/drm/virtio/virtgpu_display.c
+index 85ea252c6..1865a82ea 100644
+--- a/drivers/gpu/drm/virtio/virtgpu_display.c
++++ b/drivers/gpu/drm/virtio/virtgpu_display.c
+@@ -325,8 +325,7 @@ virtio_gpu_user_framebuffer_create(struct drm_device *dev,
+ 	struct virtio_gpu_framebuffer *virtio_gpu_fb;
+ 	int ret;
+ 
+-	if (mode_cmd->pixel_format != DRM_FORMAT_HOST_XRGB8888 &&
+-	    mode_cmd->pixel_format != DRM_FORMAT_HOST_ARGB8888)
++	if (!virtio_gpu_is_scanout_format(dev->dev_private, mode_cmd->pixel_format))
+ 		return ERR_PTR(-ENOENT);
+ 
+ 	/* lookup object associated with res handle */
+diff --git a/drivers/gpu/drm/virtio/virtgpu_drv.h b/drivers/gpu/drm/virtio/virtgpu_drv.h
+index 5610add1d..a0a8dcf48 100644
+--- a/drivers/gpu/drm/virtio/virtgpu_drv.h
++++ b/drivers/gpu/drm/virtio/virtgpu_drv.h
+@@ -480,6 +480,7 @@ void virtio_gpu_modeset_fini(struct virtio_gpu_device *vgdev);
+ 
+ /* virtgpu_plane.c */
+ uint32_t virtio_gpu_translate_format(uint32_t drm_fourcc);
++bool virtio_gpu_is_scanout_format(struct virtio_gpu_device *vgdev, u32 format);
+ struct drm_plane *virtio_gpu_plane_init(struct virtio_gpu_device *vgdev,
+ 					enum drm_plane_type type,
+ 					int index);
+diff --git a/drivers/gpu/drm/virtio/virtgpu_plane.c b/drivers/gpu/drm/virtio/virtgpu_plane.c
+index 1d1b27ece..a9c20fca7 100644
+--- a/drivers/gpu/drm/virtio/virtgpu_plane.c
++++ b/drivers/gpu/drm/virtio/virtgpu_plane.c
+@@ -36,8 +36,23 @@
+ 
+ static const uint32_t virtio_gpu_formats[] = {
+ 	DRM_FORMAT_HOST_XRGB8888,
++	/*
++	 * With virgl the host shows a 3D resource in the format it was created
++	 * with; the framebuffer format only has to be accepted. Android's
++	 * SurfaceFlinger renders its client target in RGBA (ABGR8888).
++	 */
++	DRM_FORMAT_ABGR8888,
++	DRM_FORMAT_XBGR8888,
+ };
+ 
++bool virtio_gpu_is_scanout_format(struct virtio_gpu_device *vgdev, u32 format)
++{
++	if (format == DRM_FORMAT_HOST_XRGB8888 || format == DRM_FORMAT_HOST_ARGB8888)
++		return true;
++	return vgdev->has_virgl_3d &&
++	       (format == DRM_FORMAT_ABGR8888 || format == DRM_FORMAT_XBGR8888);
++}
++
+ static const uint32_t virtio_gpu_cursor_formats[] = {
+ 	DRM_FORMAT_HOST_ARGB8888,
+ };

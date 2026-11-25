@@ -17,8 +17,15 @@ JOBS=${KERNEL_JOBS:-$(nproc)}
 # (no spaces, lower case), on "lineage-pc".
 export KBUILD_BUILD_USER=${KBUILD_BUILD_USER:-$( (git config user.name || id -un) | tr -d ' ' | tr '[:upper:]' '[:lower:]')}
 export KBUILD_BUILD_HOST=${KBUILD_BUILD_HOST:-lineage-pc}
+# The release is the version plus CONFIG_LOCALVERSION only: kernel/patches/ leave the tree modified,
+# and an unset LOCALVERSION makes setlocalversion append "-dirty".
+export LOCALVERSION=
 MAKE=(make -C "$SRC" O="$OUT" LLVM=1 PATH="$CLANG:$PATH")
 
+# Our fixes on top of upstream (kernel/patches/*.patch), each applied once.
+for patch in "$HERE"/patches/*.patch; do
+    git -C "$SRC" apply --reverse --check "$patch" 2>/dev/null || git -C "$SRC" apply "$patch"
+done
 mkdir -p "$OUT"
 python3 "$HERE/kconfig.py" signing "$OUT/signing.config" "$SIGNING_KEY"
 python3 "$HERE/kconfig.py" merge "$OUT/.config" "$HERE/fedora-7.2.config" "$REQUIRED" "$HERE/pc.config" \
