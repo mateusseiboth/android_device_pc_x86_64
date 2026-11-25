@@ -67,7 +67,7 @@ if [ "$DISK" = 1 ]; then
 	# Laid out like a PC's (GPT, EFI partition, ext4): the installer uses an existing partition.
 	[ -f "$DIR/disk.qcow2" ] || "$(dirname "$0")/make_test_disk.sh" "$DIR/disk.qcow2" 64
 	# SATA: SeaBIOS (--bios, --direct) cannot boot from NVMe; OVMF boots both.
-	ARGS+=(-drive file="$DIR/disk.qcow2",if=none,id=d0 -device ide-hd,drive=d0,bus=ide.0)
+	ARGS+=(-drive file="$DIR/disk.qcow2",if=none,id=d0 -device ide-hd,drive=d0,bus=ide.1)
 fi
 
 if [ -n "$LOG" ]; then
