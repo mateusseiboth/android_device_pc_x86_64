@@ -156,6 +156,11 @@ PRODUCT_PACKAGES += \
     PcTerminal \
     pc-containerd
 
+# Linux apps (packages/apps/PcWayland): the Wayland compositor. Each Linux window is its own Activity and
+# each Wayland surface its own SurfaceControl; the launcher entry "Linux apps" holds the containers' apps.
+PRODUCT_PACKAGES += \
+    PcWayland
+
 # Desktop apps: task manager, diagnostics (also Settings > About hardware rows), text editor, viewer, and
 # Files (the file manager; DocumentsUI stays the system file picker).
 PRODUCT_PACKAGES += \
