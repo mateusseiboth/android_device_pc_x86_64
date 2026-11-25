@@ -19,6 +19,8 @@ class PcHypervisorTest(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.tmp)
         self.sysfs = self.tmp / "sys"
         (self.sysfs / "class/misc").mkdir(parents=True)
+        self.cpuinfo = self.tmp / "cpuinfo"
+        self.cpuinfo.write_text(cpuinfo(flags="fpu vme sse sse2 vmx"))
         self.calls = self.tmp / "setprop.calls"
         bin_dir = self.tmp / "bin"
         bin_dir.mkdir()
@@ -28,7 +30,8 @@ class PcHypervisorTest(unittest.TestCase):
         self.env = dict(os.environ, PATH=f"{bin_dir}:{os.environ['PATH']}")
 
     def run_script(self):
-        return subprocess.run([SH, str(SCRIPT), str(self.sysfs)], env=self.env, capture_output=True, text=True)
+        return subprocess.run([SH, str(SCRIPT), str(self.sysfs), str(self.cpuinfo)], env=self.env,
+                              capture_output=True, text=True)
 
     def setprop_calls(self):
         return self.calls.read_text().splitlines() if self.calls.exists() else []
@@ -49,6 +52,21 @@ class PcHypervisorTest(unittest.TestCase):
         (self.sysfs / "class/misc/kvm").symlink_to(device)
         self.run_script()
         self.assertEqual(self.setprop_calls(), ["vendor.pc.kvm true"])
+
+    # Running as a VM guest (the CPU reports the hypervisor flag): init keeps the screen on, because
+    # QEMU's virtio-gpu does not come back from suspend.
+    def test_reports_a_vm_guest(self):
+        self.cpuinfo.write_text(cpuinfo(flags="fpu sse sse2 hypervisor"))
+        self.run_script()
+        self.assertEqual(self.setprop_calls(), ["vendor.pc.guest true"])
+
+    def test_bare_metal_is_not_a_guest(self):
+        self.run_script()
+        self.assertNotIn("vendor.pc.guest true", self.setprop_calls())
+
+
+def cpuinfo(flags):
+    return f"processor\t: 0\nvendor_id\t: AuthenticAMD\nflags\t\t: {flags}\n\n"
 
 
 if __name__ == "__main__":

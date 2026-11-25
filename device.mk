@@ -84,6 +84,21 @@ PRODUCT_PACKAGES += \
     android.hardware.drm-service-lazy.clearkey \
     vulkan.pc
 
+# SurfaceFlinger's client target in BGRA_8888 (DRM ARGB8888): every KMS driver scans it out, while
+# virtio-gpu (QEMU/KVM) refuses RGBA_8888 framebuffers and the screen stays black.
+PRODUCT_VENDOR_PROPERTIES += ro.surface_flinger.default_composition_pixel_format=5
+
+# Java heap: without dalvik.vm.heap* every process, system_server too, is capped at 16 MB. PC values:
+# 384 MB for an app, 512 MB for one that asks for a large heap. No more: ART's compacting GC reserves
+# twice the heap size, and the 32-bit zygote cannot map 2 GB.
+PRODUCT_VENDOR_PROPERTIES += \
+    dalvik.vm.heapstartsize=16m \
+    dalvik.vm.heapgrowthlimit=384m \
+    dalvik.vm.heapsize=512m \
+    dalvik.vm.heaptargetutilization=0.75 \
+    dalvik.vm.heapminfree=2m \
+    dalvik.vm.heapmaxfree=16m
+
 # Audio: AOSP's AIDL audio HAL over ALSA (HDA and USB), effects and policy.
 PRODUCT_PACKAGES += \
     com.android.hardware.audio \
@@ -93,7 +108,8 @@ $(call inherit-product, frameworks/av/services/audiopolicy/audio_policy_config_v
 $(call inherit-product, hardware/interfaces/audio/aidl/default/audio_effects.mk)
 PRODUCT_COPY_FILES += \
     device/pc/pc_x86_64/audio/audio_policy_configuration.xml:$(TARGET_COPY_OUT_VENDOR)/etc/audio_policy_configuration.xml \
-    device/pc/pc_x86_64/audio/primary_audio_policy_configuration.xml:$(TARGET_COPY_OUT_VENDOR)/etc/primary_audio_policy_configuration.xml
+    device/pc/pc_x86_64/audio/primary_audio_policy_configuration.xml:$(TARGET_COPY_OUT_VENDOR)/etc/primary_audio_policy_configuration.xml \
+    frameworks/av/services/audiopolicy/config/bluetooth_with_le_audio_policy_configuration_7_0.xml:$(TARGET_COPY_OUT_VENDOR)/etc/bluetooth_with_le_audio_policy_configuration_7_0.xml
 
 # Wi-Fi (nl80211, no vendor HAL) and Bluetooth (HCI user channel on any controller).
 PRODUCT_PACKAGES += \

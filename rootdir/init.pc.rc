@@ -4,6 +4,8 @@ on fs
     # pc-init (the initrd) mounted the system and /data before Android started; there is nothing left
     # for fs_mgr to mount and /data is not encrypted.
     setprop ro.crypto.state unsupported
+    # What mount_all queues on an unencrypted /data: init.rc starts class main and late_start on it.
+    trigger nonencrypted
 
 # Linux terminal (AVF): non-protected VMs on KVM, when VT-x/AMD-V is enabled (pc-hypervisor.sh). An
 # androidboot.hypervisor.* argument on the kernel command line is set first and wins.
@@ -14,6 +16,11 @@ on post-fs
 on property:vendor.pc.kvm=true
     setprop ro.boot.hypervisor.vm.supported true
     setprop hypervisor.memory_reclaim.supported true
+
+# Inside a VM the screen stays on: QEMU's virtio-gpu does not come back from suspend, and the screen
+# would freeze once Android slept after the screen timeout.
+on property:sys.boot_completed=1 && property:vendor.pc.guest=true
+    exec - system system -- /system/bin/svc power stayon true
 
 service pc-hypervisor /vendor/bin/pc-hypervisor.sh
     user system

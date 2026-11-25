@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<!-- Audio policy for PCs: the AOSP AIDL audio HAL (ALSA) as primary, plus USB audio and remote submix. -->
+<!-- Audio policy for PCs: the AOSP AIDL audio HAL (ALSA) as primary, plus USB audio, remote submix and Bluetooth. -->
 <audioPolicyConfiguration version="7.0" xmlns:xi="http://www.w3.org/2001/XInclude">
     <globalConfiguration speaker_drc_enabled="false" call_screen_mode_supported="false"/>
 
@@ -7,6 +7,8 @@
         <xi:include href="primary_audio_policy_configuration.xml"/>
         <xi:include href="r_submix_audio_policy_configuration.xml"/>
         <xi:include href="usb_audio_policy_configuration.xml"/>
+        <!-- The audio APEX declares IModule/bluetooth: audioserver waits for every declared module. -->
+        <xi:include href="bluetooth_with_le_audio_policy_configuration_7_0.xml"/>
     </modules>
 
     <xi:include href="audio_policy_volumes.xml"/>

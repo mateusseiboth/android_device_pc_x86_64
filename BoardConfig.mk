@@ -20,6 +20,11 @@ TARGET_USERIMAGES_USE_EXT4 := true
 TARGET_USERIMAGES_SPARSE_EXT_DISABLED := true
 BOARD_SYSTEMIMAGE_FILE_SYSTEM_TYPE := ext4
 BOARD_USERDATAIMAGE_PARTITION_SIZE := 4294967296
+# Only for the /metadata mount point in the root: pc-init mounts the install's metadata/ folder there
+# (RAM on the live ISO); apexd keeps its sessions and init the boot reasons in it.
+BOARD_USES_METADATA_PARTITION := true
+# Base device manifest (/vendor/etc/vintf/manifest.xml); the HALs add their own fragments to it.
+DEVICE_MANIFEST_FILE := device/pc/pc_x86_64/manifest.xml
 BOARD_FLASH_BLOCK_SIZE := 512
 
 # Graphics: Mesa built from external/mesa3d by GloDroid's aospext (glodroid/aospext). radeonsi and RADV

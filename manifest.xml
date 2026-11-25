@@ -1,0 +1,20 @@
+<!--
+    Device manifest of LineageOS for PCs. libvintf reads the fragments in /vendor/etc/vintf/manifest/
+    (each HAL ships its own) only when this file exists; keystore2 aborts without a device manifest.
+-->
+<manifest version="1.0" type="device" target-level="202604">
+    <!-- The audio HAL makes a usb module from audio_policy_configuration.xml, but the audio APEX's own
+         manifest leaves IModule/usb out; without it the module cannot register. -->
+    <hal format="aidl">
+        <name>android.hardware.audio.core</name>
+        <version>4</version>
+        <fqname>IModule/usb</fqname>
+    </hal>
+    <!-- USB webcams: AOSP's external camera provider (V1) registers ICameraProvider/external/0 and
+         ships no manifest fragment of its own. -->
+    <hal format="aidl">
+        <name>android.hardware.camera.provider</name>
+        <version>1</version>
+        <fqname>ICameraProvider/external/0</fqname>
+    </hal>
+</manifest>
