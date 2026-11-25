@@ -277,6 +277,14 @@ The mouse is relative (`usb-mouse`): Android has no class for absolute pointers 
 `BTN_TOUCH`, so QEMU's tablet does nothing. QEMU's virtio-gpu does not come back from suspend:
 the VM has no S3/S4, and Android keeps the screen on when it finds the CPU's hypervisor flag.
 
+## ARM apps
+
+Apps that only ship ARM code run through Google's libndk_translation native bridge (arm64 only:
+Android 17 is 64-bit). It is proprietary, so the device tree only inherits
+`vendor/pc-ndk-local/ndk_translation.mk` when that local folder exists; it is made from the Android 17
+emulator image (`system-images;android-37.0;google_apis;x86_64`). ARM executables run through
+binfmt_misc (`CONFIG_BINFMT_MISC=y`).
+
 ## Google services
 
 The public build has microG (GmsCore, GsfProxy, FakeStore) and F-Droid from

@@ -169,3 +169,8 @@ PRODUCT_PACKAGES += \
     PcTextEditor \
     PcViewer \
     PcFiles
+
+# ARM (arm64) apps through Google's libndk_translation native bridge. Proprietary, so it lives in the
+# local vendor/pc-ndk-local (never pushed): builds without it simply have no ARM translation.
+$(call inherit-product-if-exists, vendor/pc-ndk-local/ndk_translation.mk)
+
