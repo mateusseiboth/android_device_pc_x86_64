@@ -146,7 +146,7 @@ def xorriso_args(out, tree, stamp):
             '-b', BIOS_ELTORITO, '-no-emul-boot', '-boot-load-size', '4', '-boot-info-table', '--grub2-boot-info',
             '--grub2-mbr', str(BIOS_HYBRID_MBR),
             '--efi-boot', 'efi.img', '-efi-boot-part', '--efi-boot-image', '--protective-msdos-label',
-            '-r', '-volid', VOLUME_ID, '-o', str(out), str(tree)]
+            '-r', '-iso-level', '3', '-volid', VOLUME_ID, '-o', str(out), str(tree)]
 
 
 # ---- BIOS GRUB -----------------------------------------------------------------------------------------

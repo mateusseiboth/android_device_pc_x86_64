@@ -15,3 +15,9 @@ PRODUCT_MANUFACTURER := Generic
 
 # Local-only additions for personal test builds (never published); skipped when the folder is absent.
 $(call inherit-product-if-exists, vendor/gbos-local/gbos_local.mk)
+
+# microG (GmsCore, GsfProxy, FakeStore) and F-Droid, from vendor/partner_gms (LineageOS for microG).
+# A local build with Google's apps (WITH_GMS=true) has Google's GmsCore instead: same package name.
+ifneq ($(WITH_GMS),true)
+$(call inherit-product-if-exists, vendor/partner_gms/products/gms.mk)
+endif

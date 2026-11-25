@@ -117,6 +117,11 @@ class IsoImageTest(unittest.TestCase):
         self.assertEqual(args[args.index("-volid") + 1], "LINEAGE_PC")
         self.assertEqual(args[-1], "tree")
 
+    def test_system_images_of_4_gib_and_more_fit(self):
+        # ISO 9660 level 2 caps a file below 4 GiB; level 3 splits it in extents, which Linux reads.
+        args = xorriso_args(Path("out.iso"), Path("tree"), "2026112417083300")
+        self.assertEqual(args[args.index("-iso-level") + 1], "3")
+
     def test_bios_eltorito_image_reads_the_disc(self):
         args = bios_eltorito_args(Path("eltorito.img"))
         self.assertEqual(args[args.index("-O") + 1], "i386-pc-eltorito")

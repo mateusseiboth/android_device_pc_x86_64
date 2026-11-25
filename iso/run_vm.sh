@@ -10,6 +10,7 @@
 #   run_vm.sh --bios          legacy BIOS instead of UEFI
 #   run_vm.sh --no-iso        boot only from the virtual disk (needs --disk)
 #   run_vm.sh --log FILE      saves the serial console (kernel and init messages) to FILE
+#   run_vm.sh --direct        skips the firmware and GRUB: QEMU loads the ISO's kernel and initrd itself
 set -euo pipefail
 
 TOP=$(cd "$(dirname "$0")/../../../.." && pwd)
@@ -20,6 +21,7 @@ DISK=0
 BIOS=0
 USE_ISO=1
 LOG=
+DIRECT=0
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--disk) DISK=1 ;;
@@ -28,6 +30,7 @@ while [ $# -gt 0 ]; do
 		--bios) BIOS=1 ;;
 		--no-iso) USE_ISO=0 ;;
 		--log) LOG=$2; shift ;;
+		--direct) DIRECT=1 ;;
 		*) echo "unknown option: $1"; exit 1 ;;
 	esac
 	shift
@@ -40,9 +43,18 @@ ARGS=(-enable-kvm -cpu host -smp 4 -m 6G -machine q35,vmport=off -name "LineageO
 	-global ICH9-LPC.disable_s3=1 -global ICH9-LPC.disable_s4=1
 	-device "virtio-vga-gl,xres=${RES%x*},yres=${RES#*x}" -display sdl,gl=on
 	-device qemu-xhci -device usb-mouse -device usb-kbd
-	-netdev user,id=n -device virtio-net-pci,netdev=n
-	-audiodev pipewire,id=snd -device intel-hda -device hda-duplex,audiodev=snd)
+	-netdev user,id=n -device virtio-net-pci,netdev=n)
 
+if [ "$DIRECT" = 1 ]; then
+	# What GRUB's first entry boots: the live system from the ISO.
+	xorriso -osirrox on -indev "$ISO" -extract /lineage/kernel "$DIR/kernel" \
+		-extract /lineage/initrd.img "$DIR/initrd.img" >/dev/null 2>&1
+	chmod u+w "$DIR/kernel" "$DIR/initrd.img"
+	ARGS+=(-kernel "$DIR/kernel" -initrd "$DIR/initrd.img" -append "androidboot.hardware=pc \
+androidboot.selinux=permissive firmware_class.path=/vendor/firmware console=ttyS0,115200 console=tty0 \
+pc.src=lineage pc.live=1 pc.id=live")
+	BIOS=1
+fi
 if [ "$BIOS" = 0 ]; then
 	[ -f "$DIR/OVMF_VARS.fd" ] || cp /usr/share/edk2/ovmf/OVMF_VARS.fd "$DIR/OVMF_VARS.fd"
 	ARGS+=(-drive if=pflash,format=raw,readonly=on,file=/usr/share/edk2/ovmf/OVMF_CODE.fd
@@ -52,8 +64,10 @@ if [ "$USE_ISO" = 1 ]; then
 	ARGS+=(-drive file="$ISO",media=cdrom,readonly=on)
 fi
 if [ "$DISK" = 1 ]; then
-	[ -f "$DIR/disk.qcow2" ] || qemu-img create -q -f qcow2 "$DIR/disk.qcow2" 64G
-	ARGS+=(-drive file="$DIR/disk.qcow2",if=none,id=d0 -device nvme,drive=d0,serial=lineagepc)
+	# Laid out like a PC's (GPT, EFI partition, ext4): the installer uses an existing partition.
+	[ -f "$DIR/disk.qcow2" ] || "$(dirname "$0")/make_test_disk.sh" "$DIR/disk.qcow2" 64
+	# SATA: SeaBIOS (--bios, --direct) cannot boot from NVMe; OVMF boots both.
+	ARGS+=(-drive file="$DIR/disk.qcow2",if=none,id=d0 -device ide-hd,drive=d0,bus=ide.0)
 fi
 
 if [ -n "$LOG" ]; then

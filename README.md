@@ -248,11 +248,12 @@ Tests: `python3 -m unittest` in `kernel/`, `initrd/`, `iso/`, `secureboot/`, `vu
 
 `iso/run_vm.sh` boots `out/lineage-pc.iso` in QEMU/KVM like a PC: UEFI firmware, the GRUB menu, the
 live system, a `virtio-vga-gl` screen (virgl) at 1920x1080 in an SDL window, USB keyboard and mouse,
-HDA audio and user networking. Click in the window to use the mouse; Ctrl+Alt+G gives it back.
+and user networking. Click in the window to use the mouse; Ctrl+Alt+G gives it back.
 
 ```sh
+device/pc/pc_x86_64/iso/run_vm.sh --direct        # QEMU loads the ISO's kernel itself (no firmware, no GRUB)
 device/pc/pc_x86_64/iso/run_vm.sh                 # live, nothing kept
-device/pc/pc_x86_64/iso/run_vm.sh --disk          # plus a 64 GB NVMe disk (out/vm/disk.qcow2) for the installer
+device/pc/pc_x86_64/iso/run_vm.sh --disk          # plus a 64 GB SATA disk (out/vm/disk.qcow2: GPT, EFI partition, ext4)
 device/pc/pc_x86_64/iso/run_vm.sh --disk --no-iso # the installed system
 device/pc/pc_x86_64/iso/run_vm.sh --res 1366x768 --bios
 ```
@@ -260,6 +261,25 @@ device/pc/pc_x86_64/iso/run_vm.sh --res 1366x768 --bios
 The mouse is relative (`usb-mouse`): Android has no class for absolute pointers without
 `BTN_TOUCH`, so QEMU's tablet does nothing. QEMU's virtio-gpu does not come back from suspend:
 the VM has no S3/S4, and Android keeps the screen on when it finds the CPU's hypervisor flag.
+
+## Google services
+
+The public build has microG (GmsCore, GsfProxy, FakeStore) and F-Droid from
+[LineageOS for microG's vendor/partner_gms](https://github.com/lineageos4microg/android_vendor_partner_gms);
+its `vendorsetup.sh` downloads the APKs and checks their signatures. LineageOS 24 lets only microG's
+GmsCore spoof Google's signature (`MicrogUtils`).
+
+Other choices are add-ons: ext4 images in the install folder's `addons/`, laid over the system by
+`pc-init` with overlayfs (in name order; an update replaces the system and keeps them). Whiteouts in an
+add-on hide microG. `addons/make_addon.py` makes them as zips:
+
+```sh
+device/pc/pc_x86_64/addons/make_addon.py none -o no-google.zip                  # no Google services
+device/pc/pc_x86_64/addons/make_addon.py google --from DIR -o google-apps.zip   # Google's apps
+```
+
+`DIR` holds `product/` and `system_ext/` of an Android 17 x86_64 Google image you own. Google's apps
+may not be redistributed: keep that zip to yourself.
 
 ## Multiboot sticks (Ventoy)
 

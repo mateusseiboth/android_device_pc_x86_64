@@ -22,6 +22,7 @@
  *   pc-init --plan ROOT CMDLINE print what would be mounted from a partition mounted at ROOT
  *   pc-init --isos ROOT CMDLINE print our ISO files found on a partition mounted at ROOT
  *   pc-init --first-stage       print the first-stage steps run before `init selinux_setup`
+ *   pc-init --lowerdir COUNT    print the overlay options for COUNT add-ons
  */
 #define _GNU_SOURCE
 #include <dirent.h>
@@ -34,6 +35,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <linux/kd.h>
 #include <grp.h>
 #include <sys/mount.h>
 #include <sys/sysmacros.h>
@@ -44,6 +46,11 @@
 #define SRC_MOUNT "/mnt/src"
 #define ISO_MOUNT "/mnt/iso"
 #define ANDROID_ROOT "/android"
+/* With add-ons the system is mounted here and the Android root is an overlay of the add-ons
+ * (ADDON_MOUNT/<n>) over it. */
+#define SYSTEM_MOUNT "/mnt/system"
+#define ADDON_MOUNT "/mnt/addon"
+#define MAX_ADDONS 8
 #define FIND_TRIES 60
 
 /* ---- options --------------------------------------------------------------------------- */
@@ -94,6 +101,8 @@ struct plan {
 	const char *data_kind;
 	char metadata[PATH_MAX];
 	const char *metadata_kind;
+	char addons[MAX_ADDONS][PATH_MAX]; /* relative to root, in name order */
+	int addon_count;
 };
 
 static int is_file(const char *path) { struct stat st; return !stat(path, &st) && S_ISREG(st.st_mode); }
@@ -149,6 +158,49 @@ static void find_metadata(const struct options *o, struct plan *p)
 		p->metadata[0] = 0;
 }
 
+static int by_name(const void *a, const void *b) { return strcmp(a, b); }
+
+/* Add-ons: the .img files in the install folder's addons/ (the installer's choice of Google services), laid over
+ * the system in name order. An update replaces the system and keeps them; the live ISO has none. */
+static void find_addons(const char *root, const struct options *o, struct plan *p)
+{
+	p->addon_count = 0;
+	if (o->live)
+		return;
+	char dir[PATH_MAX * 2];
+	snprintf(dir, sizeof dir, "%s/%s/addons", root, o->src);
+	DIR *d = opendir(dir);
+	if (!d)
+		return;
+	char names[MAX_ADDONS][NAME_MAX + 1];
+	int count = 0;
+	for (struct dirent *e; (e = readdir(d)) && count < MAX_ADDONS;) {
+		size_t len = strlen(e->d_name);
+		char path[PATH_MAX * 3];
+		snprintf(path, sizeof path, "%s/%s", dir, e->d_name);
+		if (len > 4 && !strcmp(e->d_name + len - 4, ".img") && is_file(path))
+			snprintf(names[count++], NAME_MAX + 1, "%s", e->d_name);
+	}
+	closedir(d);
+	qsort(names, count, sizeof *names, by_name);
+	for (int i = 0; i < count; i++)
+		snprintf(p->addons[i], PATH_MAX, "%s/addons/%s", o->src, names[i]);
+	p->addon_count = count;
+}
+
+/* The overlay's lowerdir: the add-ons over the system, the first one on top; empty without add-ons. */
+static void build_lowerdir(int count, char *out, size_t len)
+{
+	out[0] = 0;
+	if (count <= 0)
+		return;
+	size_t used = (size_t)snprintf(out, len, "lowerdir=");
+	for (int i = 0; i < count && used < len; i++)
+		used += (size_t)snprintf(out + used, len - used, "%s/%d:", ADDON_MOUNT, i);
+	if (used < len)
+		snprintf(out + used, len - used, "%s", SYSTEM_MOUNT);
+}
+
 static int has_id_file(const char *root, const struct options *o)
 {
 	char path[PATH_MAX * 2];
@@ -162,6 +214,7 @@ static int make_plan(const char *root, const struct options *o, struct plan *p)
 		return -1;
 	find_data(root, o, p);
 	find_metadata(o, p);
+	find_addons(root, o, p);
 	return 0;
 }
 
@@ -304,8 +357,26 @@ static const struct step FIRST_STAGE[] = {
 #define INIT_PATH "/system/bin/init"
 #define INIT_STAGE "selinux_setup"
 
+/* The screen's console goes to graphics mode before Android draws: while it is in text mode every
+ * write to it (kernel messages, anything on /dev/console) makes the kernel's text console repaint
+ * over SurfaceFlinger, and the screen flickers. Done while devtmpfs still provides /dev/tty0. */
+#define SCREEN_CONSOLE "/dev/tty0"
+
+static void say(const char *fmt, ...);
+
+static void stop_text_console(void)
+{
+	int fd = open(SCREEN_CONSOLE, O_RDWR | O_CLOEXEC);
+	if (fd < 0)
+		return;
+	if (ioctl(fd, KDSETMODE, KD_GRAPHICS))
+		say("%s stays in text mode: %s", SCREEN_CONSOLE, strerror(errno));
+	close(fd);
+}
+
 static int print_first_stage(void)
 {
+	printf("graphics %s\n", SCREEN_CONSOLE);
 	for (size_t i = 0; i < sizeof FIRST_STAGE / sizeof *FIRST_STAGE; i++)
 		FIRST_STAGE[i].print(&FIRST_STAGE[i]);
 	printf("setgroups %d\nexec %s %s\n", AID_READPROC, INIT_PATH, INIT_STAGE);
@@ -517,6 +588,37 @@ static void read_file(const char *path, char *out, size_t len)
 		close(fd);
 }
 
+/* The Android root: the system itself, or with add-ons an overlay of them over it. An add-on that
+ * does not mount is left out (with the ones after it), so a bad one never keeps Android from booting. */
+static int mount_root(struct plan *p)
+{
+	if (!p->addon_count)
+		return mount_kind(p->system_kind, p->root, p->system, ANDROID_ROOT, MS_RDONLY);
+	mkdir(SYSTEM_MOUNT, 0755);
+	mkdir(ADDON_MOUNT, 0755);
+	if (mount_kind(p->system_kind, p->root, p->system, SYSTEM_MOUNT, MS_RDONLY))
+		return -1;
+	int mounted = 0;
+	for (; mounted < p->addon_count; mounted++) {
+		char target[64];
+		snprintf(target, sizeof target, "%s/%d", ADDON_MOUNT, mounted);
+		mkdir(target, 0755);
+		if (mount_kind("img", p->root, p->addons[mounted], target, MS_RDONLY)) {
+			say("add-on %s left out: it does not mount", p->addons[mounted]);
+			break;
+		}
+	}
+	p->addon_count = mounted;
+	char options[512];
+	build_lowerdir(mounted, options, sizeof options);
+	if (mounted && !mount("overlay", ANDROID_ROOT, "overlay", MS_RDONLY, options))
+		return 0;
+	if (mounted)
+		say("add-ons left out: the overlay does not mount: %s", strerror(errno));
+	p->addon_count = 0;
+	return mount(SYSTEM_MOUNT, ANDROID_ROOT, NULL, MS_BIND, NULL);
+}
+
 static int stage1(void)
 {
 	mkdir("/proc", 0755);
@@ -546,14 +648,16 @@ static int stage1(void)
 	if (strcmp(p.data_kind, "tmpfs"))
 		mount(NULL, SRC_MOUNT, NULL, MS_REMOUNT, NULL);
 
-	if (mount_kind(p.system_kind, p.root, p.system, ANDROID_ROOT, MS_RDONLY))
+	if (mount_root(&p))
 		halt_with("cannot mount the system");
 	if (mount_kind(p.data_kind, p.root, p.data, ANDROID_ROOT "/data", MS_NOSUID | MS_NODEV | MS_NOATIME))
 		halt_with("cannot mount the user data");
 	if (mount_kind(p.metadata_kind, p.root, p.metadata, ANDROID_ROOT "/metadata", MS_NOSUID | MS_NODEV | MS_NOATIME))
 		say("cannot mount /metadata");
-	say("system %s (%s), data %s (%s); starting Android", p.system, p.system_kind, p.data, p.data_kind);
+	say("system %s (%s), data %s (%s), %d add-ons; starting Android", p.system, p.system_kind, p.data,
+	    p.data_kind, p.addon_count);
 
+	stop_text_console();
 	if (chdir(ANDROID_ROOT) || mount(".", "/", NULL, MS_MOVE, NULL) || chroot(".") || chdir("/"))
 		halt_with("cannot switch to the Android root");
 	for (size_t i = 0; i < sizeof FIRST_STAGE / sizeof *FIRST_STAGE; i++)
@@ -588,6 +692,10 @@ static int print_plan(const char *root, const char *cmdline)
 		return 1;
 	printf("system=%s\nsystem_kind=%s\ndata=%s\ndata_kind=%s\nmetadata=%s\nmetadata_kind=%s\n", p.system,
 	       p.system_kind, p.data, p.data_kind, p.metadata, p.metadata_kind);
+	printf("addons=");
+	for (int i = 0; i < p.addon_count; i++)
+		printf("%s%s", i ? "," : "", p.addons[i]);
+	printf("\n");
 	return 0;
 }
 
@@ -612,6 +720,12 @@ int main(int argc, char **argv)
 		return print_isos(argv[2], argv[3]);
 	if (argc == 2 && !strcmp(argv[1], "--first-stage"))
 		return print_first_stage();
+	if (argc == 3 && !strcmp(argv[1], "--lowerdir")) {
+		char options[512];
+		build_lowerdir(atoi(argv[2]), options, sizeof options);
+		printf("%s\n", options);
+		return 0;
+	}
 	if (getpid() != 1) {
 		fprintf(stderr, "usage: pc-init --cmdline CMDLINE | --plan ROOT CMDLINE | --isos ROOT CMDLINE (or as PID 1)\n");
 		return 2;

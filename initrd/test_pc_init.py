@@ -63,13 +63,15 @@ class PlanTest(PcInitTest):
         root = self.install("lineage/system.img", "lineage/userdata/")
         self.assertEqual(self.plan(root), {"system": "lineage/system.img", "system_kind": "img",
                                            "data": "lineage/userdata", "data_kind": "dir",
-                                           "metadata": "lineage/metadata", "metadata_kind": "dir"})
+                                           "metadata": "lineage/metadata", "metadata_kind": "dir",
+                                           "addons": ""})
 
     def test_extracted_system_and_data_image(self):
         root = self.install("lineage/system/init", "lineage/data.img")
         self.assertEqual(self.plan(root), {"system": "lineage/system", "system_kind": "dir",
                                            "data": "lineage/data.img", "data_kind": "img",
-                                           "metadata": "lineage/metadata", "metadata_kind": "dir"})
+                                           "metadata": "lineage/metadata", "metadata_kind": "dir",
+                                           "addons": ""})
 
     def test_a_new_install_gets_a_data_folder(self):
         root = self.install("lineage/system.img")
@@ -80,6 +82,17 @@ class PlanTest(PcInitTest):
         plan = self.plan(root, "pc.live=1")
         self.assertEqual((plan["data"], plan["data_kind"]), ("", "tmpfs"))
         self.assertEqual((plan["metadata"], plan["metadata_kind"]), ("", "tmpfs"))
+
+    # Add-ons (the installer's choice of Google services) are images in addons/, laid over the system
+    # in name order; an update replaces the system and keeps them.
+    def test_addons_are_listed_in_name_order(self):
+        root = self.install("lineage/system.img", "lineage/addons/b-google.img", "lineage/addons/a-fix.img",
+                            "lineage/addons/notes.txt")
+        self.assertEqual(self.plan(root)["addons"], "lineage/addons/a-fix.img,lineage/addons/b-google.img")
+
+    def test_live_has_no_addons(self):
+        root = self.install("lineage/system.img", "lineage/addons/google.img")
+        self.assertEqual(self.plan(root, "pc.live=1")["addons"], "")
 
     def test_previous_system_after_a_bad_update(self):
         root = self.install("lineage/system.img", "lineage/system.old.img")
@@ -106,6 +119,16 @@ class PlanTest(PcInitTest):
     def test_a_partition_without_the_folder_is_not_the_install(self):
         self.assertIsNone(self.plan(self.install("other/system.img")))
 
+
+
+class OverlayTest(PcInitTest):
+    # With add-ons the Android root is an overlay: the add-ons over the system, the first one on top.
+    def test_lowerdir_puts_the_addons_over_the_system(self):
+        self.assertEqual(self.run_exe("--lowerdir", "2").strip(),
+                         "lowerdir=/mnt/addon/0:/mnt/addon/1:/mnt/system")
+
+    def test_no_addons_no_overlay(self):
+        self.assertEqual(self.run_exe("--lowerdir", "0").strip(), "")
 
 
 def write_iso(path, label):
@@ -154,8 +177,15 @@ class FirstStageTest(PcInitTest):
 
     def test_dev_is_a_fresh_tmpfs_before_anything_goes_in_it(self):
         steps = self.steps()
-        self.assertEqual(steps[0], "mount tmpfs /dev tmpfs mode=0755")
+        self.assertEqual(steps[1], "mount tmpfs /dev tmpfs mode=0755")
         self.assertLess(steps.index("mount tmpfs /dev tmpfs mode=0755"), steps.index("mknod /dev/kmsg 600 1:11"))
+
+    # The screen's console goes to graphics mode before Android draws: otherwise every write to it
+    # makes the kernel's text console repaint over SurfaceFlinger and the screen flickers.
+    def test_the_text_console_stops_drawing_before_android(self):
+        steps = self.steps()
+        self.assertEqual(steps[0], "graphics /dev/tty0")
+        self.assertLess(steps.index("graphics /dev/tty0"), steps.index("mount tmpfs /dev tmpfs mode=0755"))
 
     def test_what_selinux_setup_and_second_stage_expect(self):
         steps = self.steps()
