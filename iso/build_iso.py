@@ -75,6 +75,8 @@ BOOT_ENTRIES = (
     ('LineageOS (safe graphics)', f'pc.live=1 pc.id={LIVE_ID} nomodeset'),
     ('LineageOS (debug: serial console, kernel log)',
      f'pc.live=1 pc.id={LIVE_ID} loglevel=7 8250.nr_uarts=4 console=ttyS0,115200'),
+    # A PC without serial port: adb over the network (TCP 5555) from boot, without Settings.
+    ('LineageOS (debug: adb over network)', f'pc.live=1 pc.id={LIVE_ID} androidboot.pc.adb=1'),
 )
 HELP_ENTRY = 'Secure Boot: help (ajuda)'
 

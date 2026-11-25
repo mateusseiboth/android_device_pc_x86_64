@@ -227,6 +227,20 @@ The model and the drawing (`bootlog_model.*`, `bootlog_render.*`) have no Androi
 `bootlog/test_bootlog.py` builds their gtest suite with the host compiler, using the tree's
 `external/googletest` (outside the tree, set `ANDROID_BUILD_TOP`); in the build it is `pc-bootlog-test`.
 
+## Debugging a real PC
+
+Most PCs have no serial port, so the GRUB entry **LineageOS (debug: adb over network)** turns adb on over
+TCP 5555 from boot (`androidboot.pc.adb=1`, handled in `rootdir/init.pc.rc`), without opening Settings.
+On an installed system, press `e` on its GRUB entry and add `androidboot.pc.adb=1` to the `linux` line.
+Then, from another computer on the same network:
+
+```
+adb connect <PC address>:5555
+adb logcat
+```
+
+The first connection shows the usual prompt on the PC's screen to allow the computer's key.
+
 ## Tree
 
 | Path | What |

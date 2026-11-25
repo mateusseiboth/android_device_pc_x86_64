@@ -181,5 +181,13 @@ class LoopbackCfgTest(unittest.TestCase):
         self.assertNotIn("iso-scan/filename", grub_cfg("lineage"))
 
 
+class AdbDebugEntryTest(unittest.TestCase):
+    """A real PC without serial port: the debug entry turns adb on over the network at boot."""
+
+    def test_an_entry_turns_adb_on(self):
+        titles = [title for title, args in BOOT_ENTRIES if "androidboot.pc.adb=1" in args]
+        self.assertEqual(titles, ["LineageOS (debug: adb over network)"])
+
+
 if __name__ == "__main__":
     unittest.main()
