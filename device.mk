@@ -145,9 +145,11 @@ PRODUCT_PACKAGES += \
     pc-hypervisor.sh \
     pc-terminal-default-permissions.xml
 
-# Desktop apps: task manager, diagnostics (also Settings > About hardware rows), text editor, viewer.
+# Desktop apps: task manager, diagnostics (also Settings > About hardware rows), text editor, viewer, and
+# Files (the file manager; DocumentsUI stays the system file picker).
 PRODUCT_PACKAGES += \
     PcTaskManager \
     PcDiagnostics \
     PcTextEditor \
-    PcViewer
+    PcViewer \
+    PcFiles

@@ -38,6 +38,7 @@ Sync LineageOS 24.0 and add `.repo/local_manifests/pc.xml`:
   <project path="packages/apps/PcDiagnostics" name="android_packages_apps_PcDiagnostics" remote="pc" revision="lineage-24.0" />
   <project path="packages/apps/PcTextEditor" name="android_packages_apps_PcTextEditor" remote="pc" revision="lineage-24.0" />
   <project path="packages/apps/PcViewer" name="android_packages_apps_PcViewer" remote="pc" revision="lineage-24.0" />
+  <project path="packages/apps/PcFiles" name="android_packages_apps_PcFiles" remote="pc" revision="lineage-24.0" />
   <project path="packages/apps/PcLogin" name="android_packages_apps_PcLogin" remote="pc" revision="lineage-24.0" />
   <remove-project name="LineageOS/android_packages_apps_SetupWizard" />
   <project path="packages/apps/SetupWizard" name="android_packages_apps_SetupWizard" remote="pc" revision="pc" />
