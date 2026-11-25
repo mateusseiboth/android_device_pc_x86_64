@@ -7,15 +7,15 @@ an existing partition and booted through GRUB, in the spirit of Android-x86 and 
 
 | Part | State |
 |---|---|
-| Product, board, lunch | builds (`system.img`) |
+| Product, board, lunch | builds (`system.img`, live ISO) |
 | Kernel | upstream 7.2 with Fedora's config + Android requirements, built with AOSP clang |
-| Graphics | Mesa (radeonsi, iris, crocus, r600, nouveau, virgl, softpipe; RADV, ANV, venus), minigbm on Mesa's GBM, drm_hwcomposer — integrating |
-| Boot | `pc-init` initrd (folder install, live ISO) — not yet booted; UEFI Secure Boot through shim + MOK checked in QEMU (shim, GRUB, signed kernel) |
-| HALs | AOSP software HALs, AIDL audio over ALSA, Wi-Fi (nl80211), Bluetooth, USB cameras — not yet booted |
+| Graphics | Mesa (radeonsi, iris, crocus, r600, nouveau, virgl, softpipe; RADV, ANV, venus), minigbm on Mesa's GBM, drm_hwcomposer — virgl checked in QEMU/KVM (`virtio-vga-gl`), real GPUs not yet |
+| Boot | `pc-init` initrd (folder install, live ISO) — the live ISO boots to the desktop in QEMU/KVM; UEFI Secure Boot through shim + MOK checked in QEMU (shim, GRUB, signed kernel) |
+| HALs | AOSP software HALs, AIDL audio over ALSA, Wi-Fi (nl80211), Bluetooth, USB cameras — they start in QEMU; on real hardware not yet |
 | Installer | `PcInstaller` app + `pc-installd` root service ([packages/apps/PcInstaller](https://github.com/mateusseiboth/android_packages_apps_PcInstaller)), UEFI and BIOS, install, update (also from a USB drive on an installed system) and removal; GRUB's BIOS boot sector checked in QEMU, Android not yet booted |
-| Desktop UI | [vendor/pc/ui](https://github.com/mateusseiboth/android_vendor_pc_ui) + `pc` branches of frameworks/base and Launcher3 — not yet built |
-| Linux terminal | AVF (`com.android.virt`, crosvm, Terminal app) on KVM, non-protected VMs — not yet built |
-| Boot log | `pc-bootlog`: the live log as a terminal instead of the boot animation; host tests pass, not yet built |
+| Desktop UI | [vendor/pc/ui](https://github.com/mateusseiboth/android_vendor_pc_ui) + `pc` branches of frameworks/base and Launcher3 — runs in QEMU/KVM (screenshots below) |
+| Linux terminal | AVF (`com.android.virt`, crosvm, Terminal app) on KVM, non-protected VMs — built, not yet run (needs a PC, not a VM) |
+| Boot log | `pc-bootlog`: the live log as a terminal instead of the boot animation — runs in QEMU/KVM |
 
 ## Sources
 
@@ -244,12 +244,45 @@ The model and the drawing (`bootlog_model.*`, `bootlog_render.*`) have no Androi
 
 Tests: `python3 -m unittest` in `kernel/`, `initrd/`, `iso/`, `secureboot/`, `vulkan/`, `terminal/` and `bootlog/`; `secureboot/sb_boot_test.py` boots an ISO in QEMU.
 
+## Trying it in a VM
+
+`iso/run_vm.sh` boots `out/lineage-pc.iso` in QEMU/KVM like a PC: UEFI firmware, the GRUB menu, the
+live system, a `virtio-vga-gl` screen (virgl) at 1920x1080 in an SDL window, USB keyboard and mouse,
+HDA audio and user networking. Click in the window to use the mouse; Ctrl+Alt+G gives it back.
+
+```sh
+device/pc/pc_x86_64/iso/run_vm.sh                 # live, nothing kept
+device/pc/pc_x86_64/iso/run_vm.sh --disk          # plus a 64 GB NVMe disk (out/vm/disk.qcow2) for the installer
+device/pc/pc_x86_64/iso/run_vm.sh --disk --no-iso # the installed system
+device/pc/pc_x86_64/iso/run_vm.sh --res 1366x768 --bios
+```
+
+The mouse is relative (`usb-mouse`): Android has no class for absolute pointers without
+`BTN_TOUCH`, so QEMU's tablet does nothing. QEMU's virtio-gpu does not come back from suspend:
+the VM has no S3/S4, and Android keeps the screen on when it finds the CPU's hypervisor flag.
+
 ## Multiboot sticks (Ventoy)
 
 The ISO also boots as a file on a multiboot stick. In Ventoy's normal mode pc-init looks for our ISO
 (volume label `LINEAGE_PC`) at the root and one folder down of every partition, loop-mounts it and
 boots the folder inside. Loaders that boot ISOs through `boot/grub/loopback.cfg` (Ventoy's GRUB2 mode,
 Super GRUB2 and the like) pass `iso-scan/filename=${iso_path}` instead, naming the file directly.
+
+## Screenshots
+
+Taken in QEMU/KVM at 1920x1080 from the live ISO.
+
+![Boot log with the live logcat.](docs/screenshots/01-bootlog.png)
+
+Boot log with the live logcat.
+
+![First boot.](docs/screenshots/02-setup-wizard.png)
+
+First boot.
+
+![Desktop after setup.](docs/screenshots/03-desktop.png)
+
+Desktop after setup.
 
 ## Credits
 
