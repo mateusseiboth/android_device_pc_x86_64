@@ -9,6 +9,7 @@
 #   run_vm.sh --res WxH       screen size (default 1920x1080)
 #   run_vm.sh --bios          legacy BIOS instead of UEFI
 #   run_vm.sh --no-iso        boot only from the virtual disk (needs --disk)
+#   run_vm.sh --log FILE      saves the serial console (kernel and init messages) to FILE
 set -euo pipefail
 
 TOP=$(cd "$(dirname "$0")/../../../.." && pwd)
@@ -18,6 +19,7 @@ RES=1920x1080
 DISK=0
 BIOS=0
 USE_ISO=1
+LOG=
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--disk) DISK=1 ;;
@@ -25,6 +27,7 @@ while [ $# -gt 0 ]; do
 		--res) RES=$2; shift ;;
 		--bios) BIOS=1 ;;
 		--no-iso) USE_ISO=0 ;;
+		--log) LOG=$2; shift ;;
 		*) echo "unknown option: $1"; exit 1 ;;
 	esac
 	shift
@@ -51,6 +54,10 @@ fi
 if [ "$DISK" = 1 ]; then
 	[ -f "$DIR/disk.qcow2" ] || qemu-img create -q -f qcow2 "$DIR/disk.qcow2" 64G
 	ARGS+=(-drive file="$DIR/disk.qcow2",if=none,id=d0 -device nvme,drive=d0,serial=lineagepc)
+fi
+
+if [ -n "$LOG" ]; then
+	ARGS+=(-serial "file:$LOG")
 fi
 
 exec qemu-system-x86_64 "${ARGS[@]}"
