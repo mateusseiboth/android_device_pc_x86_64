@@ -4,8 +4,8 @@
  * GRUB loads the kernel and this initrd from the install folder. pc-init finds the partition that
  * holds the folder, mounts the system (system.img through a loop device, or the extracted system/
  * folder) as the Android root, mounts the user data (data.img, the userdata/ folder, or RAM for the
- * live ISO) on its /data, and switch_roots into Android's /init. Android's first stage finds no
- * first-stage fstab and goes straight on to SELinux setup.
+ * live ISO) on its /data, switch_roots into it, prepares what Android's first stage would and runs
+ * `init selinux_setup`.
  *
  * Kernel command line:
  *   pc.src=DIR      install folder, relative to the partition root (default: lineage)
@@ -21,6 +21,7 @@
  *   pc-init --cmdline CMDLINE   print the parsed options
  *   pc-init --plan ROOT CMDLINE print what would be mounted from a partition mounted at ROOT
  *   pc-init --isos ROOT CMDLINE print our ISO files found on a partition mounted at ROOT
+ *   pc-init --first-stage       print the first-stage steps run before `init selinux_setup`
  */
 #define _GNU_SOURCE
 #include <dirent.h>
@@ -33,7 +34,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <grp.h>
 #include <sys/mount.h>
+#include <sys/sysmacros.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -89,6 +92,8 @@ struct plan {
 	const char *system_kind;
 	char data[PATH_MAX];
 	const char *data_kind;
+	char metadata[PATH_MAX];
+	const char *metadata_kind;
 };
 
 static int is_file(const char *path) { struct stat st; return !stat(path, &st) && S_ISREG(st.st_mode); }
@@ -134,6 +139,16 @@ static void find_data(const char *root, const struct options *o, struct plan *p)
 		snprintf(p->data, sizeof p->data, "%s/userdata", o->src);
 }
 
+/* /metadata (apexd sessions, boot reasons): RAM for the live ISO, else the metadata/ folder, which
+ * an update keeps like userdata/. */
+static void find_metadata(const struct options *o, struct plan *p)
+{
+	p->metadata_kind = o->live ? "tmpfs" : "dir";
+	snprintf(p->metadata, sizeof p->metadata, "%s/metadata", o->src);
+	if (o->live)
+		p->metadata[0] = 0;
+}
+
 static int has_id_file(const char *root, const struct options *o)
 {
 	char path[PATH_MAX * 2];
@@ -146,6 +161,7 @@ static int make_plan(const char *root, const struct options *o, struct plan *p)
 	if (!has_id_file(root, o) || find_system(root, o, p))
 		return -1;
 	find_data(root, o, p);
+	find_metadata(o, p);
 	return 0;
 }
 
@@ -229,6 +245,73 @@ static void find_isos(const char *root, const struct options *o, struct iso_list
 	scan_isos(root, "", 1, l);
 }
 
+/* ---- Android's first stage ----------------------------------------------------------- */
+
+/* Android 17's /system/bin/init only runs the second stage (FirstStageMain lives in the ramdisk's
+ * init), so pc-init prepares what the first stage would (system/core/init/first_stage_init.cpp, in
+ * its order) and runs `init selinux_setup`. */
+#define AID_READPROC 3009
+#define TMPFS_FLAGS (MS_NOEXEC | MS_NOSUID | MS_NODEV)
+
+struct step {
+	int (*run)(const struct step *);
+	void (*print)(const struct step *);
+	const char *source, *target, *type, *data;
+	unsigned long flags;
+	mode_t mode;
+	unsigned major, minor;
+};
+
+static int run_mount(const struct step *s) { return mount(s->source, s->target, s->type, s->flags, s->data); }
+static int run_mkdir(const struct step *s) { return mkdir(s->target, 0755); }
+static int run_mknod(const struct step *s)
+{
+	return mknod(s->target, S_IFCHR | s->mode, makedev(s->major, s->minor));
+}
+
+static void print_mount(const struct step *s)
+{
+	printf("mount %s %s %s%s%s\n", s->source, s->target, s->type, s->data ? " " : "", s->data ? s->data : "");
+}
+static void print_mkdir(const struct step *s) { printf("mkdir %s\n", s->target); }
+static void print_mknod(const struct step *s) { printf("mknod %s %o %u:%u\n", s->target, s->mode, s->major, s->minor); }
+
+#define MOUNT(src, tgt, typ, fl, dat) { run_mount, print_mount, src, tgt, typ, dat, fl, 0, 0, 0 }
+#define MKDIR(tgt) { run_mkdir, print_mkdir, NULL, tgt, NULL, NULL, 0, 0, 0, 0 }
+#define MKNOD(tgt, md, maj, min) { run_mknod, print_mknod, NULL, tgt, NULL, NULL, 0, md, maj, min }
+
+static const struct step FIRST_STAGE[] = {
+	MOUNT("tmpfs", "/dev", "tmpfs", MS_NOSUID, "mode=0755"),
+	MKDIR("/dev/pts"),
+	MKDIR("/dev/socket"),
+	MKDIR("/dev/dm-user"),
+	MOUNT("devpts", "/dev/pts", "devpts", 0, NULL),
+	MOUNT("proc", "/proc", "proc", 0, "hidepid=2,gid=3009"),
+	MOUNT("sysfs", "/sys", "sysfs", 0, NULL),
+	MOUNT("selinuxfs", "/sys/fs/selinux", "selinuxfs", 0, NULL),
+	MKNOD("/dev/kmsg", 0600, 1, 11),
+	MKNOD("/dev/random", 0666, 1, 8),
+	MKNOD("/dev/urandom", 0666, 1, 9),
+	MKNOD("/dev/ptmx", 0666, 5, 2),
+	MKNOD("/dev/null", 0666, 1, 3),
+	MOUNT("tmpfs", "/mnt", "tmpfs", TMPFS_FLAGS, "mode=0755,uid=0,gid=1000"),
+	MKDIR("/mnt/vendor"),
+	MKDIR("/mnt/product"),
+	MOUNT("tmpfs", "/debug_ramdisk", "tmpfs", TMPFS_FLAGS, "mode=0755,uid=0,gid=0"),
+	MOUNT("tmpfs", "/second_stage_resources", "tmpfs", TMPFS_FLAGS, "mode=0755,uid=0,gid=0"),
+};
+
+#define INIT_PATH "/system/bin/init"
+#define INIT_STAGE "selinux_setup"
+
+static int print_first_stage(void)
+{
+	for (size_t i = 0; i < sizeof FIRST_STAGE / sizeof *FIRST_STAGE; i++)
+		FIRST_STAGE[i].print(&FIRST_STAGE[i]);
+	printf("setgroups %d\nexec %s %s\n", AID_READPROC, INIT_PATH, INIT_STAGE);
+	return 0;
+}
+
 /* ---- stage-1 init ---------------------------------------------------------------------- */
 
 static void say(const char *fmt, ...)
@@ -303,6 +386,25 @@ static int find_install(const struct options *o, struct plan *p)
 	return found;
 }
 
+/* A loop device made by LOOP_CTL_GET_FREE gets its /dev node from devtmpfs a moment later (no loop
+ * devices exist up front when CONFIG_BLK_DEV_LOOP_MIN_COUNT is 0). */
+#define NODE_TRIES 50
+#define LOOP_BLOCK_SIZE 512
+#define NODE_WAIT_US 20000
+
+static int open_when_present(const char *path, int flags)
+{
+	for (int i = 0; i < NODE_TRIES; i++) {
+		int fd = open(path, flags);
+		if (fd >= 0 || errno != ENOENT)
+			return fd;
+		usleep(NODE_WAIT_US);
+	}
+	return -1;
+}
+
+/* Returns the open loop device: the caller mounts it, then closes it. The device is set to clear
+ * itself on last close (LO_FLAGS_AUTOCLEAR), so closing before the mount would undo it. */
 static int attach_loop(const char *file, int read_only, char *dev, size_t len)
 {
 	int ctl = open("/dev/loop-control", O_RDWR | O_CLOEXEC);
@@ -313,15 +415,19 @@ static int attach_loop(const char *file, int read_only, char *dev, size_t len)
 		return -1;
 	snprintf(dev, len, "/dev/loop%d", n);
 	int backing = open(file, (read_only ? O_RDONLY : O_RDWR) | O_CLOEXEC);
-	int loop = open(dev, (read_only ? O_RDONLY : O_RDWR) | O_CLOEXEC);
+	int loop = open_when_present(dev, (read_only ? O_RDONLY : O_RDWR) | O_CLOEXEC);
+	/* 512-byte blocks whatever disk holds the image (a CD has 2048-byte sectors). */
 	struct loop_config cfg = { .fd = (unsigned)backing,
+				   .block_size = LOOP_BLOCK_SIZE,
 				   .info = { .lo_flags = LO_FLAGS_AUTOCLEAR | (read_only ? LO_FLAGS_READ_ONLY : 0) } };
-	int ok = backing >= 0 && loop >= 0 && !ioctl(loop, LOOP_CONFIGURE, &cfg) ? 0 : -1;
+	int ok = backing >= 0 && loop >= 0 && !ioctl(loop, LOOP_CONFIGURE, &cfg);
+	if (!ok)
+		say("cannot attach %s to %s: %s", file, dev, strerror(errno));
 	if (backing >= 0)
 		close(backing);
-	if (loop >= 0)
+	if (!ok && loop >= 0)
 		close(loop);
-	return ok;
+	return ok ? loop : -1;
 }
 
 /* The partition at SRC_MOUNT stays mounted: the ISO's loop device keeps the file open. */
@@ -332,7 +438,12 @@ static int find_in_isos(const struct options *o, struct plan *p)
 	for (size_t i = 0; i < l.count; i++) {
 		char file[PATH_MAX * 2], dev[64];
 		snprintf(file, sizeof file, "%s/%s", SRC_MOUNT, l.path[i]);
-		if (attach_loop(file, 1, dev, sizeof dev) || mount(dev, ISO_MOUNT, "iso9660", MS_RDONLY, NULL))
+		int loop = attach_loop(file, 1, dev, sizeof dev);
+		if (loop < 0)
+			continue;
+		int mounted = !mount(dev, ISO_MOUNT, "iso9660", MS_RDONLY, NULL);
+		close(loop);
+		if (!mounted)
 			continue;
 		if (!make_plan(ISO_MOUNT, o, p)) {
 			snprintf(p->root, sizeof p->root, "%s", ISO_MOUNT);
@@ -347,12 +458,18 @@ static int find_in_isos(const struct options *o, struct plan *p)
 static int mount_image(const char *file, const char *target, unsigned long flags)
 {
 	char dev[64];
-	if (attach_loop(file, (flags & MS_RDONLY) != 0, dev, sizeof dev))
+	int loop = attach_loop(file, (flags & MS_RDONLY) != 0, dev, sizeof dev);
+	if (loop < 0)
 		return -1;
 	static const char *const IMAGE_FS[] = { "ext4", "erofs", "f2fs" };
-	for (size_t i = 0; i < sizeof IMAGE_FS / sizeof *IMAGE_FS; i++)
-		if (!mount(dev, target, IMAGE_FS[i], flags, NULL))
-			return 0;
+	int mounted = 0;
+	for (size_t i = 0; i < sizeof IMAGE_FS / sizeof *IMAGE_FS && !mounted; i++)
+		mounted = !mount(dev, target, IMAGE_FS[i], flags, NULL);
+	int err = errno;
+	close(loop);
+	if (mounted)
+		return 0;
+	say("cannot mount %s (%s): %s", file, dev, strerror(err));
 	return -1;
 }
 
@@ -433,18 +550,21 @@ static int stage1(void)
 		halt_with("cannot mount the system");
 	if (mount_kind(p.data_kind, p.root, p.data, ANDROID_ROOT "/data", MS_NOSUID | MS_NODEV | MS_NOATIME))
 		halt_with("cannot mount the user data");
+	if (mount_kind(p.metadata_kind, p.root, p.metadata, ANDROID_ROOT "/metadata", MS_NOSUID | MS_NODEV | MS_NOATIME))
+		say("cannot mount /metadata");
 	say("system %s (%s), data %s (%s); starting Android", p.system, p.system_kind, p.data, p.data_kind);
 
-	static const char *const MOVED[] = { "/dev", "/proc", "/sys" };
-	for (size_t i = 0; i < sizeof MOVED / sizeof *MOVED; i++) {
-		char target[64];
-		snprintf(target, sizeof target, "%s%s", ANDROID_ROOT, MOVED[i]);
-		mount(MOVED[i], target, NULL, MS_MOVE, NULL);
-	}
 	if (chdir(ANDROID_ROOT) || mount(".", "/", NULL, MS_MOVE, NULL) || chroot(".") || chdir("/"))
 		halt_with("cannot switch to the Android root");
-	char *const argv[] = { "/init", NULL };
-	execv("/init", argv);
+	for (size_t i = 0; i < sizeof FIRST_STAGE / sizeof *FIRST_STAGE; i++)
+		if (FIRST_STAGE[i].run(&FIRST_STAGE[i]))
+			say("first stage: %s: %s", FIRST_STAGE[i].target, strerror(errno));
+	gid_t groups[] = { AID_READPROC };
+	setgroups(1, groups);
+	clearenv();
+	setenv("PATH", "/system/bin:/system/xbin:/odm/bin:/vendor/bin:/vendor/xbin", 1);
+	char *const argv[] = { INIT_PATH, INIT_STAGE, NULL };
+	execv(INIT_PATH, argv);
 	halt_with(strerror(errno));
 	return 1;
 }
@@ -466,7 +586,8 @@ static int print_plan(const char *root, const char *cmdline)
 	parse_cmdline(cmdline, &o);
 	if (make_plan(root, &o, &p))
 		return 1;
-	printf("system=%s\nsystem_kind=%s\ndata=%s\ndata_kind=%s\n", p.system, p.system_kind, p.data, p.data_kind);
+	printf("system=%s\nsystem_kind=%s\ndata=%s\ndata_kind=%s\nmetadata=%s\nmetadata_kind=%s\n", p.system,
+	       p.system_kind, p.data, p.data_kind, p.metadata, p.metadata_kind);
 	return 0;
 }
 
@@ -489,6 +610,8 @@ int main(int argc, char **argv)
 		return print_plan(argv[2], argv[3]);
 	if (argc == 4 && !strcmp(argv[1], "--isos"))
 		return print_isos(argv[2], argv[3]);
+	if (argc == 2 && !strcmp(argv[1], "--first-stage"))
+		return print_first_stage();
 	if (getpid() != 1) {
 		fprintf(stderr, "usage: pc-init --cmdline CMDLINE | --plan ROOT CMDLINE | --isos ROOT CMDLINE (or as PID 1)\n");
 		return 2;

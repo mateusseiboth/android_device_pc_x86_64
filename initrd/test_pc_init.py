@@ -62,12 +62,14 @@ class PlanTest(PcInitTest):
     def test_system_image_and_data_folder(self):
         root = self.install("lineage/system.img", "lineage/userdata/")
         self.assertEqual(self.plan(root), {"system": "lineage/system.img", "system_kind": "img",
-                                           "data": "lineage/userdata", "data_kind": "dir"})
+                                           "data": "lineage/userdata", "data_kind": "dir",
+                                           "metadata": "lineage/metadata", "metadata_kind": "dir"})
 
     def test_extracted_system_and_data_image(self):
         root = self.install("lineage/system/init", "lineage/data.img")
         self.assertEqual(self.plan(root), {"system": "lineage/system", "system_kind": "dir",
-                                           "data": "lineage/data.img", "data_kind": "img"})
+                                           "data": "lineage/data.img", "data_kind": "img",
+                                           "metadata": "lineage/metadata", "metadata_kind": "dir"})
 
     def test_a_new_install_gets_a_data_folder(self):
         root = self.install("lineage/system.img")
@@ -77,6 +79,7 @@ class PlanTest(PcInitTest):
         root = self.install("lineage/system.img", "lineage/data.img")
         plan = self.plan(root, "pc.live=1")
         self.assertEqual((plan["data"], plan["data_kind"]), ("", "tmpfs"))
+        self.assertEqual((plan["metadata"], plan["metadata_kind"]), ("", "tmpfs"))
 
     def test_previous_system_after_a_bad_update(self):
         root = self.install("lineage/system.img", "lineage/system.old.img")
@@ -140,6 +143,28 @@ class IsoFileTest(PcInitTest):
 
     def test_no_iso_no_candidates(self):
         self.assertEqual(self.isos(Path(tempfile.mkdtemp(dir=self.tmp))), [])
+
+
+
+class FirstStageTest(PcInitTest):
+    # Android 17's /system/bin/init only runs the second stage; pc-init does what the ramdisk's first
+    # stage does (in its order) and then runs `init selinux_setup`.
+    def steps(self):
+        return self.run_exe("--first-stage").splitlines()
+
+    def test_dev_is_a_fresh_tmpfs_before_anything_goes_in_it(self):
+        steps = self.steps()
+        self.assertEqual(steps[0], "mount tmpfs /dev tmpfs mode=0755")
+        self.assertLess(steps.index("mount tmpfs /dev tmpfs mode=0755"), steps.index("mknod /dev/kmsg 600 1:11"))
+
+    def test_what_selinux_setup_and_second_stage_expect(self):
+        steps = self.steps()
+        for step in ("mount proc /proc proc hidepid=2,gid=3009", "mount sysfs /sys sysfs",
+                     "mount selinuxfs /sys/fs/selinux selinuxfs", "mknod /dev/null 666 1:3",
+                     "mount tmpfs /mnt tmpfs mode=0755,uid=0,gid=1000", "mkdir /mnt/vendor",
+                     "mount tmpfs /second_stage_resources tmpfs mode=0755,uid=0,gid=0"):
+            self.assertIn(step, steps)
+        self.assertEqual(steps[-1], "exec /system/bin/init selinux_setup")
 
 
 if __name__ == "__main__":
