@@ -99,6 +99,11 @@ PRODUCT_VENDOR_PROPERTIES += \
     dalvik.vm.heapminfree=2m \
     dalvik.vm.heapmaxfree=16m
 
+# Shared memory through memfd: the kernel has no ashmem driver (gone from mainline Linux), and
+# Android only picks memfd by itself for vendor API 202604+ and apps targeting SDK 37+. Without it
+# older apps crash sharing a bitmap (the browser, F-Droid).
+PRODUCT_VENDOR_PROPERTIES += sys.use_memfd=true
+
 # Audio: AOSP's AIDL audio HAL over ALSA (HDA and USB), effects and policy.
 PRODUCT_PACKAGES += \
     com.android.hardware.audio \
