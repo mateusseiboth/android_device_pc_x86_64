@@ -150,6 +150,12 @@ PRODUCT_PACKAGES += \
     pc-hypervisor.sh \
     pc-terminal-default-permissions.xml
 
+# Linux containers, distrobox-like: the Terminal app and its root service pc-containerd
+# (packages/apps/PcTerminal). Containers live in /data/linux and share the person's storage.
+PRODUCT_PACKAGES += \
+    PcTerminal \
+    pc-containerd
+
 # Desktop apps: task manager, diagnostics (also Settings > About hardware rows), text editor, viewer, and
 # Files (the file manager; DocumentsUI stays the system file picker).
 PRODUCT_PACKAGES += \
