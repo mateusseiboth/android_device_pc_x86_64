@@ -305,6 +305,10 @@ First boot.
 
 Desktop after setup.
 
+![Login screen of an installed system.](docs/screenshots/08-login.png)
+
+Login screen of an installed system, from the second boot on.
+
 ## Credits
 
 - [LineageOS](https://lineageos.org) ([GitHub](https://github.com/LineageOS)): the base system and build this is part of.
