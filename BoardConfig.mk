@@ -61,6 +61,8 @@ BOARD_DO_NOT_STRIP_VENDOR_MODULES := true
 
 # Some firmware blobs are ELF files.
 BUILD_BROKEN_ELF_PREBUILT_PRODUCT_COPY_FILES := true
+# Execute bits for copied files (the X11 bundle).
+TARGET_FS_CONFIG_GEN += device/pc/pc_x86_64/config.fs
 
 # Wi-Fi: any nl80211 driver through wpa_supplicant (no vendor HAL, no private driver library).
 WPA_SUPPLICANT_VERSION := VER_0_8_X

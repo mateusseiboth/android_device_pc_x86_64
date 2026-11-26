@@ -57,6 +57,13 @@ PRODUCT_COPY_FILES += \
     device/pc/pc_x86_64/rootdir/fstab.pc:$(TARGET_COPY_OUT_VENDOR)/etc/fstab.pc \
     device/pc/pc_x86_64/rootdir/ueventd.rc:$(TARGET_COPY_OUT_VENDOR)/etc/ueventd.rc
 
+# X11 for every Linux container (pc-containerd mounts it at /run/pc-x11): Xwayland, xwayland-satellite,
+# xkbcomp and dbus-daemon with their own libraries, built by packages/apps/PcWayland/x11/build_bundle.sh.
+PC_X11_BUNDLE ?= out/pc-x11
+PC_X11_FILES := $(shell cd $(PC_X11_BUNDLE) 2>/dev/null && find . -type f -printf '%P\n' | grep -v '[: ]')
+PRODUCT_COPY_FILES += \
+    $(foreach f,$(PC_X11_FILES),$(PC_X11_BUNDLE)/$(f):$(TARGET_COPY_OUT_SYSTEM_EXT)/pc-x11/$(f))
+
 # Firmware for GPUs, Wi-Fi, Bluetooth and the rest (the kernel loads the .xz/.zst files as they are).
 # PC_FIRMWARE_DIR: a linux-firmware tree inside the source tree (kernel/stage_firmware.sh copies the host's).
 PC_FIRMWARE_DIR ?= vendor/pc/firmware
