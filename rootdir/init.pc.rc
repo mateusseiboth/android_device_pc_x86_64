@@ -1,5 +1,10 @@
 # LineageOS for PCs (androidboot.hardware=pc).
 
+on early-init
+    # init.rc clears the kernel's module loader; drivers that load helpers by name need it back
+    # (iwlwifi's iwlmvm, which makes wlan0, and Intel sound's machine drivers).
+    write /proc/sys/kernel/modprobe /vendor/bin/pc-modprobe.sh
+
 on fs
     # pc-init (the initrd) mounted the system and /data before Android started; there is nothing left
     # for fs_mgr to mount and /data is not encrypted.
