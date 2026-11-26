@@ -43,6 +43,17 @@ on post-fs-data
     mkdir /data/vendor/wifi 0770 wifi wifi
     mkdir /data/vendor/wifi/wpa 0770 wifi wifi
     mkdir /data/vendor/wifi/wpa/sockets 0770 wifi wifi
+    exec - root root -- /system/bin/sh /vendor/bin/pc-bootlog.sh /metadata/pc-logs
+    start pc_bootlog
+
+# Logs of every boot in the install folder (metadata/pc-logs, readable from the PC's other system): all
+# buffers, kernel included, from early on, so a boot that never reaches the screen is logged too. 4 MB a
+# file, 4 files a boot, the last three boots (pc-bootlog.sh).
+service pc_bootlog /system/bin/logcat -b all -v threadtime -f /metadata/pc-logs/boot-1/logcat.txt -r 4096 -n 3
+    user root
+    group root log
+    oneshot
+    disabled
 
 # Debug (androidboot.pc.adb=1, the GRUB "adb over network" entry): adb on TCP 5555 from boot, for a PC
 # without serial port. Set before AdbService starts, so it reads adb as on; the person still approves
