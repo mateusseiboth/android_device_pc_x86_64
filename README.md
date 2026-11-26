@@ -19,31 +19,14 @@ an existing partition and booted through GRUB, in the spirit of Android-x86 and 
 
 ## Sources
 
-Sync LineageOS 24.0 and add `.repo/local_manifests/pc.xml`:
+Sync LineageOS 24.0 with the projects of LineageOS for PCs on top. They are listed in
+[`local_manifest.xml`](local_manifest.xml), the same file the ISOs are built from:
 
-```xml
-<manifest>
-  <remote name="pc" fetch="https://github.com/mateusseiboth" />
-  <remove-project name="platform/external/minigbm" />
-  <project path="external/minigbm" name="android_external_minigbm" remote="pc" revision="lineage-24.0" />
-  <project path="glodroid/aospext" name="android_glodroid_aospext" remote="pc" revision="lineage-24.0" />
-  <remove-project name="LineageOS/android_frameworks_base" />
-  <project path="frameworks/base" name="android_frameworks_base" remote="pc" revision="pc" />
-  <remove-project name="LineageOS/android_packages_apps_Launcher3" />
-  <project path="packages/apps/Launcher3" name="android_packages_apps_Launcher3" remote="pc" revision="pc" />
-  <project path="vendor/pc/ui" name="android_vendor_pc_ui" remote="pc" revision="lineage-24.0" />
-  <project path="packages/apps/PcInstaller" name="android_packages_apps_PcInstaller" remote="pc" revision="lineage-24.0" />
-  <project path="packages/apps/PcClocks" name="android_packages_apps_PcClocks" remote="pc" revision="lineage-24.0" />
-  <project path="packages/apps/PcTaskManager" name="android_packages_apps_PcTaskManager" remote="pc" revision="lineage-24.0" />
-  <project path="packages/apps/PcDiagnostics" name="android_packages_apps_PcDiagnostics" remote="pc" revision="lineage-24.0" />
-  <project path="packages/apps/PcTextEditor" name="android_packages_apps_PcTextEditor" remote="pc" revision="lineage-24.0" />
-  <project path="packages/apps/PcViewer" name="android_packages_apps_PcViewer" remote="pc" revision="lineage-24.0" />
-  <project path="packages/apps/PcFiles" name="android_packages_apps_PcFiles" remote="pc" revision="lineage-24.0" />
-  <project path="packages/apps/PcLogin" name="android_packages_apps_PcLogin" remote="pc" revision="lineage-24.0" />
-  <remove-project name="LineageOS/android_packages_apps_SetupWizard" />
-  <project path="packages/apps/SetupWizard" name="android_packages_apps_SetupWizard" remote="pc" revision="pc" />
-  <project path="device/pc/pc_x86_64" name="android_device_pc_x86_64" remote="pc" revision="lineage-24.0" />
-</manifest>
+```sh
+repo init -u https://github.com/LineageOS/android.git -b lineage-24.0 --git-lfs
+mkdir -p .repo/local_manifests
+curl -o .repo/local_manifests/pc.xml https://raw.githubusercontent.com/mateusseiboth/android_device_pc_x86_64/lineage-24.0/local_manifest.xml
+repo sync
 ```
 
 Forks: [minigbm](https://github.com/mateusseiboth/android_external_minigbm) keeps GloDroid's sources

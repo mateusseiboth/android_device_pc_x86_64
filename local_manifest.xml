@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- LineageOS for PCs: projects on top of lineage-24.0 -->
+<manifest>
+  <remote name="pc" fetch="https://github.com/mateusseiboth" />
+  <remote name="microg" fetch="https://github.com/lineageos4microg" />
+
+  <!-- drm_hwcomposer that opens every DRM card that exists (UEFI: simpledrm was card0, the GPU is card1). -->
+  <remove-project name="platform/external/drm_hwcomposer" />
+  <project path="external/drm_hwcomposer" name="android_external_drm_hwcomposer" remote="pc" revision="lineage-24.0" />
+  <!-- minigbm with the gbm_mesa backend (Mesa computes buffer layouts: one gralloc for every GPU). -->
+  <remove-project name="platform/external/minigbm" />
+  <project path="external/minigbm" name="android_external_minigbm" remote="pc" revision="lineage-24.0" />
+
+  <!-- Builds Mesa (and other meson projects) inside the Android build (GloDroid aospext). -->
+  <project path="glodroid/aospext" name="android_glodroid_aospext" remote="pc" revision="lineage-24.0" />
+
+  <!-- Desktop UI (Googlebook-like): WM Shell/SystemUI and Launcher3 changes, overlays and flags. -->
+  <remove-project name="LineageOS/android_frameworks_base" />
+  <project path="frameworks/base" name="android_frameworks_base" remote="pc" revision="pc" />
+  <remove-project name="LineageOS/android_packages_apps_Launcher3" />
+  <project path="packages/apps/Launcher3" name="android_packages_apps_Launcher3" remote="pc" revision="pc" />
+  <project path="vendor/pc/ui" name="android_vendor_pc_ui" remote="pc" revision="lineage-24.0" />
+
+  <!-- Installer (app + root service), run from the live ISO. -->
+  <project path="packages/apps/PcInstaller" name="android_packages_apps_PcInstaller" remote="pc" revision="lineage-24.0" />
+
+  <!-- Desktop apps and the login screen. -->
+  <project path="packages/apps/PcClocks" name="android_packages_apps_PcClocks" remote="pc" revision="lineage-24.0" />
+  <project path="packages/apps/PcTaskManager" name="android_packages_apps_PcTaskManager" remote="pc" revision="lineage-24.0" />
+  <project path="packages/apps/PcDiagnostics" name="android_packages_apps_PcDiagnostics" remote="pc" revision="lineage-24.0" />
+  <project path="packages/apps/PcTextEditor" name="android_packages_apps_PcTextEditor" remote="pc" revision="lineage-24.0" />
+  <project path="packages/apps/PcViewer" name="android_packages_apps_PcViewer" remote="pc" revision="lineage-24.0" />
+  <project path="packages/apps/PcFiles" name="android_packages_apps_PcFiles" remote="pc" revision="lineage-24.0" />
+  <project path="packages/apps/PcLogin" name="android_packages_apps_PcLogin" remote="pc" revision="lineage-24.0" />
+  <!-- Linux containers: the Terminal app and pc-containerd. -->
+  <project path="packages/apps/PcTerminal" name="android_packages_apps_PcTerminal" remote="pc" revision="lineage-24.0" />
+  <!-- Linux apps: the Wayland compositor, one Android window per Linux window. -->
+  <project path="packages/apps/PcWayland" name="android_packages_apps_PcWayland" remote="pc" revision="lineage-24.0" />
+  <remove-project name="LineageOS/android_packages_apps_SetupWizard" />
+  <project path="packages/apps/SetupWizard" name="android_packages_apps_SetupWizard" remote="pc" revision="pc" />
+
+  <project path="device/pc/pc_x86_64" name="android_device_pc_x86_64" remote="pc" revision="lineage-24.0" />
+  <!-- microG (open source, in the public build): GmsCore, GsfProxy, FakeStore and F-Droid; its
+       vendorsetup.sh downloads the APKs and checks their signatures. -->
+  <project path="vendor/partner_gms" name="android_vendor_partner_gms" remote="microg" revision="master" />
+  <!-- Settings: the default display is a monitor (resolution, refresh rate, size). -->
+  <remove-project name="LineageOS/android_packages_apps_Settings" />
+  <project path="packages/apps/Settings" name="android_packages_apps_Settings" remote="pc" revision="pc" />
+  <!-- adb_root: Settings of the signed-in user (headless system user mode) may ask for it. -->
+  <remove-project name="LineageOS/android_packages_modules_adb" />
+  <project path="packages/modules/adb" name="android_packages_modules_adb" remote="pc" revision="pc" />
+  <!-- logd: the system apps of the signed-in user read the logs without a consent dialog (HSUM). -->
+  <remove-project name="LineageOS/android_system_logging" />
+  <project path="system/logging" name="android_system_logging" remote="pc" revision="pc" groups="pdk" />
+</manifest>
