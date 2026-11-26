@@ -1,0 +1,6 @@
+# Root: the backlight's brightness file belongs to root in sysfs.
+service vendor.light-pc /vendor/bin/hw/android.hardware.lights-service.pc
+    class hal
+    user root
+    group system
+    shutdown critical

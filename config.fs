@@ -12,3 +12,10 @@ mode: 0755
 user: AID_ROOT
 group: AID_SHELL
 caps: 0
+
+# The kernel's module loader (rootdir/pc-modprobe.sh, CONFIG_MODPROBE_PATH).
+[vendor/bin/pc-modprobe.sh]
+mode: 0755
+user: AID_ROOT
+group: AID_SHELL
+caps: 0

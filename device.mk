@@ -55,7 +55,8 @@ PRODUCT_COPY_FILES += \
     device/pc/pc_x86_64/rootdir/init.pc.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/hw/init.pc.rc \
     device/pc/pc_x86_64/rootdir/pc-bootlog.sh:$(TARGET_COPY_OUT_VENDOR)/bin/pc-bootlog.sh \
     device/pc/pc_x86_64/rootdir/fstab.pc:$(TARGET_COPY_OUT_VENDOR)/etc/fstab.pc \
-    device/pc/pc_x86_64/rootdir/ueventd.rc:$(TARGET_COPY_OUT_VENDOR)/etc/ueventd.rc
+    device/pc/pc_x86_64/rootdir/ueventd.rc:$(TARGET_COPY_OUT_VENDOR)/etc/ueventd.rc \
+    device/pc/pc_x86_64/rootdir/pc-modprobe.sh:$(TARGET_COPY_OUT_VENDOR)/bin/pc-modprobe.sh
 
 # X11 for every Linux container (pc-containerd mounts it at /run/pc-x11): Xwayland, xwayland-satellite,
 # xkbcomp and dbus-daemon with their own libraries, built by packages/apps/PcWayland/x11/build_bundle.sh.
@@ -116,6 +117,9 @@ PRODUCT_VENDOR_PROPERTIES += \
 # Android only picks memfd by itself for vendor API 202604+ and apps targeting SDK 37+. Without it
 # older apps crash sharing a bitmap (the browser, F-Droid).
 PRODUCT_VENDOR_PROPERTIES += sys.use_memfd=true
+
+# Brightness: the display's backlight (lights/).
+PRODUCT_PACKAGES += android.hardware.lights-service.pc
 
 # Audio: AOSP's AIDL audio HAL over ALSA (HDA and USB), effects and policy.
 PRODUCT_PACKAGES += \

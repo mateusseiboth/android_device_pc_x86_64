@@ -1,0 +1,14 @@
+// The display's backlight for Android's brightness (Lights.cpp).
+cc_binary {
+    name: "android.hardware.lights-service.pc",
+    relative_install_path: "hw",
+    vendor: true,
+    srcs: ["Lights.cpp"],
+    init_rc: ["lights-pc.rc"],
+    vintf_fragments: ["lights-pc.xml"],
+    shared_libs: [
+        "libbase",
+        "libbinder_ndk",
+        "android.hardware.light-V3-ndk",
+    ],
+}
