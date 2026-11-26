@@ -5,6 +5,11 @@ on early-init
     # (iwlwifi's iwlmvm, which makes wlan0, and Intel sound's machine drivers).
     write /proc/sys/kernel/modprobe /vendor/bin/pc-modprobe.sh
 
+on post-fs
+    # The Wi-Fi module sets up its nl80211 once, when the framework starts: without cfg80211 loaded by
+    # then (a driver that loads late, a USB adapter plugged in later), Wi-Fi never turns on.
+    exec - root root -- /system/bin/modprobe -d /vendor/lib/modules cfg80211
+
 on fs
     # pc-init (the initrd) mounted the system and /data before Android started; there is nothing left
     # for fs_mgr to mount and /data is not encrypted.
