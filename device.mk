@@ -41,6 +41,10 @@ PRODUCT_VENDOR_PROPERTIES += \
     ro.hardware.egl=mesa \
     ro.opengles.version=196610
 
+# drm_hwcomposer: only the primary and cursor planes. With overlay planes the taskbar of a second
+# monitor (AMD Renoir) vanished whenever the screen stood still; the GPU composes the rest.
+PRODUCT_VENDOR_PROPERTIES += ro.vendor.hwc.use_overlay_planes=0
+
 PRODUCT_COPY_FILES += \
     frameworks/native/data/etc/android.hardware.vulkan.level-1.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.hardware.vulkan.level.xml \
     frameworks/native/data/etc/android.hardware.vulkan.version-1_3.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.hardware.vulkan.version.xml \
