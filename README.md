@@ -178,8 +178,9 @@ policy (`SYSTEM_EXT_PRIVATE_SEPOLICY_DIRS`).
 
 The boot animation is a terminal showing the live log (`logcat -b all`: kernel, main, system, events),
 colored by priority, with the time since boot, the current stage, a progress bar driven by the
-`boot_progress_*` events and the logo in the corner. It is the native version of the projector boot log
-it comes from (see Credits): C++ drawing on the CPU into a SurfaceFlinger layer, so the log shows as soon
+`boot_progress_*` events and the logo in the corner. It is the native version of the boot log of the
+[HY300 projector build](https://github.com/mateusseiboth/hy300-rk3566/tree/main/android/bootlog), with the same
+log model, stages and look: C++ drawing on the CPU into a SurfaceFlinger layer, so the log shows as soon
 as SurfaceFlinger is up, with no Java VM competing with zygote.
 
 - `bootlog/pc-bootlog.rc` overrides frameworks/base's `bootanim` service with `/system_ext/bin/pc-bootlog`.
@@ -331,8 +332,8 @@ Login screen of an installed system, from the second boot on.
 - [mokutil](https://github.com/lcp/mokutil): the reference for queuing a key (MokNew/MokAuth) that pc-installd follows.
 - [GNU xorriso](https://www.gnu.org/software/xorriso/), [mtools](https://www.gnu.org/software/mtools/) and [OpenSSL](https://www.openssl.org): the hybrid ISO, its EFI partition and the key pair.
 - [EDK II](https://github.com/tianocore/edk2) (OVMF) and [QEMU](https://www.qemu.org): the Secure Boot test.
-- The boot log comes from Mateus Seiboth's projector boot log, [hy300-rk3566/android/bootlog](https://github.com/mateusseiboth/hy300-rk3566/tree/main/android/bootlog): its log model, stages and look, ported here to its native version.
-  - Logo: capybara artwork by Mateus Seiboth.
+- The boot log comes from Mateus Seiboth's (me) projector boot log, [hy300-rk3566/android/bootlog](https://github.com/mateusseiboth/hy300-rk3566/tree/main/android/bootlog): its log model, stages and look, ported here to its native version.
+  - Logo: capybara artwork by Mateus Seiboth (me).
   - `bootlog/font/` holds glyph strips rasterized from AOSP's DroidSansMono (`frameworks/base/data/fonts`, Apache License 2.0, `bootlog/font/NOTICE`).
 - [Mesa](https://mesa3d.org), [minigbm](https://chromium.googlesource.com/chromiumos/platform/minigbm) (ChromiumOS), [drm_hwcomposer](https://gitlab.freedesktop.org/drm/hwcomposer), [linux-firmware](https://gitlab.com/kernel-firmware/linux-firmware), the [Linux kernel](https://kernel.org) and [Fedora](https://fedoraproject.org)'s kernel configuration, used as the base of `kernel/fedora-7.2.config`.
 
