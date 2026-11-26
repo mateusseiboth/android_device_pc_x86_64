@@ -50,6 +50,7 @@ PRODUCT_COPY_FILES += \
 PRODUCT_COPY_FILES += \
     device/pc/pc_x86_64/rootdir/init.pc.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/hw/init.pc.rc \
     device/pc/pc_x86_64/rootdir/pc-bootlog.sh:$(TARGET_COPY_OUT_VENDOR)/bin/pc-bootlog.sh \
+    device/pc/pc_x86_64/rootdir/fstab.pc:$(TARGET_COPY_OUT_VENDOR)/etc/fstab.pc \
     device/pc/pc_x86_64/rootdir/ueventd.rc:$(TARGET_COPY_OUT_VENDOR)/etc/ueventd.rc
 
 # Firmware for GPUs, Wi-Fi, Bluetooth and the rest (the kernel loads the .xz/.zst files as they are).

@@ -1,0 +1,6 @@
+# pc-init mounts the system, /data and /metadata itself (initrd/pc_init.c), so this fstab only tells vold
+# which removable disks to mount as public volumes: USB sticks and drives, and memory card readers.
+# Internal SATA/NVMe disks are not listed.
+
+/devices/*/usb*/*       auto    auto    defaults    voldmanaged=usb:auto
+/devices/*/mmc_host/*   auto    auto    defaults    voldmanaged=sdcard1:auto
