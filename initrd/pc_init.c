@@ -23,6 +23,7 @@
  *   pc-init --isos ROOT CMDLINE print our ISO files found on a partition mounted at ROOT
  *   pc-init --first-stage       print the first-stage steps run before `init selinux_setup`
  *   pc-init --lowerdir COUNT    print the overlay options for COUNT add-ons
+ *   pc-init --live-logs         print the steps that put the live ISO's boot logs on the stick
  */
 #define _GNU_SOURCE
 #include <dirent.h>
@@ -52,6 +53,8 @@
 #define ADDON_MOUNT "/mnt/addon"
 #define MAX_ADDONS 8
 #define FIND_TRIES 60
+/* The live ISO's boot logs: this folder at the root of the partition holding the ISO. */
+#define LIVE_LOGS "lineage-pc-logs"
 
 /* ---- options --------------------------------------------------------------------------- */
 
@@ -101,6 +104,7 @@ struct plan {
 	const char *data_kind;
 	char metadata[PATH_MAX];
 	const char *metadata_kind;
+	const char *logs; /* the live boot logs' folder on the stick; empty when /metadata keeps them */
 	char addons[MAX_ADDONS][PATH_MAX]; /* relative to root, in name order */
 	int addon_count;
 };
@@ -156,6 +160,9 @@ static void find_metadata(const struct options *o, struct plan *p)
 	snprintf(p->metadata, sizeof p->metadata, "%s/metadata", o->src);
 	if (o->live)
 		p->metadata[0] = 0;
+	/* /metadata/pc-logs keeps the logs of the last boots; in RAM they would die with a PC that
+	 * freezes before anyone can save them. */
+	p->logs = o->live ? LIVE_LOGS : "";
 }
 
 static int by_name(const void *a, const void *b) { return strcmp(a, b); }
@@ -316,7 +323,7 @@ struct step {
 };
 
 static int run_mount(const struct step *s) { return mount(s->source, s->target, s->type, s->flags, s->data); }
-static int run_mkdir(const struct step *s) { return mkdir(s->target, 0755); }
+static int run_mkdir(const struct step *s) { return mkdir(s->target, 0755) && errno != EEXIST ? -1 : 0; }
 static int run_mknod(const struct step *s)
 {
 	return mknod(s->target, S_IFCHR | s->mode, makedev(s->major, s->minor));
@@ -329,7 +336,25 @@ static void print_mount(const struct step *s)
 static void print_mkdir(const struct step *s) { printf("mkdir %s\n", s->target); }
 static void print_mknod(const struct step *s) { printf("mknod %s %o %u:%u\n", s->target, s->mode, s->major, s->minor); }
 
+static int run_remount(const struct step *s) { return mount(NULL, s->target, NULL, MS_REMOUNT, NULL); }
+static int run_bind(const struct step *s) { return mount(s->source, s->target, NULL, MS_BIND, NULL); }
+static int run_write(const struct step *s)
+{
+	int fd = open(s->target, O_WRONLY | O_CLOEXEC);
+	int ok = fd >= 0 && write(fd, s->data, strlen(s->data)) == (ssize_t)strlen(s->data);
+	if (fd >= 0)
+		close(fd);
+	return ok ? 0 : -1;
+}
+
+static void print_remount(const struct step *s) { printf("remount %s rw\n", s->target); }
+static void print_bind(const struct step *s) { printf("bind %s %s\n", s->source, s->target); }
+static void print_write(const struct step *s) { printf("write %s %s\n", s->target, s->data); }
+
 #define MOUNT(src, tgt, typ, fl, dat) { run_mount, print_mount, src, tgt, typ, dat, fl, 0, 0, 0 }
+#define REMOUNT_RW(tgt) { run_remount, print_remount, NULL, tgt, NULL, NULL, 0, 0, 0, 0 }
+#define BIND(src, tgt) { run_bind, print_bind, src, tgt, NULL, NULL, 0, 0, 0, 0 }
+#define WRITE(tgt, dat) { run_write, print_write, NULL, tgt, NULL, dat, 0, 0, 0, 0 }
 #define MKDIR(tgt) { run_mkdir, print_mkdir, NULL, tgt, NULL, NULL, 0, 0, 0, 0 }
 #define MKNOD(tgt, md, maj, min) { run_mknod, print_mknod, NULL, tgt, NULL, NULL, 0, md, maj, min }
 
@@ -353,6 +378,26 @@ static const struct step FIRST_STAGE[] = {
 	MOUNT("tmpfs", "/debug_ramdisk", "tmpfs", TMPFS_FLAGS, "mode=0755,uid=0,gid=0"),
 	MOUNT("tmpfs", "/second_stage_resources", "tmpfs", TMPFS_FLAGS, "mode=0755,uid=0,gid=0"),
 };
+
+/* The live ISO's boot logs on the partition holding it (Ventoy's exFAT, a stick made in Rufus' ISO
+ * mode). The kernel writes them out within a second, so a hard reset of a frozen PC keeps nearly all
+ * of them; on live nothing else is written to a disk. A stick that is the ISO itself (iso9660) has no
+ * room for them: the remount fails and they stay in RAM. */
+static const struct step LIVE_LOGS_STEPS[] = {
+	REMOUNT_RW(SRC_MOUNT),
+	MKDIR(SRC_MOUNT "/" LIVE_LOGS),
+	MKDIR(ANDROID_ROOT "/metadata/pc-logs"),
+	BIND(SRC_MOUNT "/" LIVE_LOGS, ANDROID_ROOT "/metadata/pc-logs"),
+	WRITE("/proc/sys/vm/dirty_writeback_centisecs", "100"),
+	WRITE("/proc/sys/vm/dirty_expire_centisecs", "100"),
+};
+
+static int print_live_logs(void)
+{
+	for (size_t i = 0; i < sizeof LIVE_LOGS_STEPS / sizeof *LIVE_LOGS_STEPS; i++)
+		LIVE_LOGS_STEPS[i].print(&LIVE_LOGS_STEPS[i]);
+	return 0;
+}
 
 #define INIT_PATH "/system/bin/init"
 #define INIT_STAGE "selinux_setup"
@@ -619,6 +664,18 @@ static int mount_root(struct plan *p)
 	return mount(SYSTEM_MOUNT, ANDROID_ROOT, NULL, MS_BIND, NULL);
 }
 
+static void keep_live_logs(const struct plan *p)
+{
+	if (!p->logs[0])
+		return;
+	for (size_t i = 0; i < sizeof LIVE_LOGS_STEPS / sizeof *LIVE_LOGS_STEPS; i++)
+		if (LIVE_LOGS_STEPS[i].run(&LIVE_LOGS_STEPS[i])) {
+			say("boot logs stay in RAM: %s: %s", LIVE_LOGS_STEPS[i].target, strerror(errno));
+			return;
+		}
+	say("boot logs in %s on the stick", LIVE_LOGS);
+}
+
 static int stage1(void)
 {
 	mkdir("/proc", 0755);
@@ -654,6 +711,7 @@ static int stage1(void)
 		halt_with("cannot mount the user data");
 	if (mount_kind(p.metadata_kind, p.root, p.metadata, ANDROID_ROOT "/metadata", MS_NOSUID | MS_NODEV | MS_NOATIME))
 		say("cannot mount /metadata");
+	keep_live_logs(&p);
 	say("system %s (%s), data %s (%s), %d add-ons; starting Android", p.system, p.system_kind, p.data,
 	    p.data_kind, p.addon_count);
 
@@ -690,8 +748,8 @@ static int print_plan(const char *root, const char *cmdline)
 	parse_cmdline(cmdline, &o);
 	if (make_plan(root, &o, &p))
 		return 1;
-	printf("system=%s\nsystem_kind=%s\ndata=%s\ndata_kind=%s\nmetadata=%s\nmetadata_kind=%s\n", p.system,
-	       p.system_kind, p.data, p.data_kind, p.metadata, p.metadata_kind);
+	printf("system=%s\nsystem_kind=%s\ndata=%s\ndata_kind=%s\nmetadata=%s\nmetadata_kind=%s\nlogs=%s\n", p.system,
+	       p.system_kind, p.data, p.data_kind, p.metadata, p.metadata_kind, p.logs);
 	printf("addons=");
 	for (int i = 0; i < p.addon_count; i++)
 		printf("%s%s", i ? "," : "", p.addons[i]);
@@ -720,6 +778,8 @@ int main(int argc, char **argv)
 		return print_isos(argv[2], argv[3]);
 	if (argc == 2 && !strcmp(argv[1], "--first-stage"))
 		return print_first_stage();
+	if (argc == 2 && !strcmp(argv[1], "--live-logs"))
+		return print_live_logs();
 	if (argc == 3 && !strcmp(argv[1], "--lowerdir")) {
 		char options[512];
 		build_lowerdir(atoi(argv[2]), options, sizeof options);

@@ -64,14 +64,14 @@ class PlanTest(PcInitTest):
         self.assertEqual(self.plan(root), {"system": "lineage/system.img", "system_kind": "img",
                                            "data": "lineage/userdata", "data_kind": "dir",
                                            "metadata": "lineage/metadata", "metadata_kind": "dir",
-                                           "addons": ""})
+                                           "logs": "", "addons": ""})
 
     def test_extracted_system_and_data_image(self):
         root = self.install("lineage/system/init", "lineage/data.img")
         self.assertEqual(self.plan(root), {"system": "lineage/system", "system_kind": "dir",
                                            "data": "lineage/data.img", "data_kind": "img",
                                            "metadata": "lineage/metadata", "metadata_kind": "dir",
-                                           "addons": ""})
+                                           "logs": "", "addons": ""})
 
     def test_a_new_install_gets_a_data_folder(self):
         root = self.install("lineage/system.img")
@@ -82,6 +82,16 @@ class PlanTest(PcInitTest):
         plan = self.plan(root, "pc.live=1")
         self.assertEqual((plan["data"], plan["data_kind"]), ("", "tmpfs"))
         self.assertEqual((plan["metadata"], plan["metadata_kind"]), ("", "tmpfs"))
+
+    # The live ISO keeps /metadata in RAM, so the boot logs (/metadata/pc-logs) would die with a PC that
+    # freezes; they go to a folder on the stick instead. An installed system keeps them in metadata/.
+    def test_live_logs_go_to_the_stick(self):
+        root = self.install("lineage/system.img")
+        self.assertEqual(self.plan(root, "pc.live=1")["logs"], "lineage-pc-logs")
+
+    def test_installed_logs_stay_in_metadata(self):
+        root = self.install("lineage/system.img")
+        self.assertEqual(self.plan(root)["logs"], "")
 
     # Add-ons (the installer's choice of Google services) are images in addons/, laid over the system
     # in name order; an update replaces the system and keeps them.
@@ -129,6 +139,20 @@ class OverlayTest(PcInitTest):
 
     def test_no_addons_no_overlay(self):
         self.assertEqual(self.run_exe("--lowerdir", "0").strip(), "")
+
+
+class LiveLogsTest(PcInitTest):
+    # The partition holding the live ISO (Ventoy's exFAT, a stick made in Rufus' ISO mode) is written
+    # to, and the kernel writes the logs out within a second, so a hard reset keeps nearly all of them.
+    def test_the_stick_folder_becomes_the_log_folder(self):
+        self.assertEqual(self.run_exe("--live-logs").splitlines(), [
+            "remount /mnt/src rw",
+            "mkdir /mnt/src/lineage-pc-logs",
+            "mkdir /android/metadata/pc-logs",
+            "bind /mnt/src/lineage-pc-logs /android/metadata/pc-logs",
+            "write /proc/sys/vm/dirty_writeback_centisecs 100",
+            "write /proc/sys/vm/dirty_expire_centisecs 100",
+        ])
 
 
 def write_iso(path, label):
