@@ -5,3 +5,6 @@ modalias_handling enabled
 /dev/kfd                  0666   system     graphics
 /dev/uinput               0660   system     bluetooth
 /dev/rfkill               0660   bluetooth  bluetooth
+
+# Brightness: the composer (drm_hwcomposer, user system) writes the panel's backlight itself.
+/sys/class/backlight/*    brightness    0664   system     system

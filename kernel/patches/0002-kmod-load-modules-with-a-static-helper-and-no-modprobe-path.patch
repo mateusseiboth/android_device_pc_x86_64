@@ -1,0 +1,27 @@
+From: LineageOS for PCs
+Subject: [PATCH] kmod: load modules with a static helper while modprobe_path is empty
+
+With CONFIG_STATIC_USERMODEHELPER every request runs the one fixed helper and
+modprobe_path is only its argv[0]. Android's init clears modprobe_path in
+early-init and the device gives it back afterwards, while ueventd already
+loads drivers: one that asks for a module by name in between (HD Audio for its
+codec driver, iwlwifi for iwlmvm) loses the request and gives up. The helper
+decides what loads (device/pc/pc_x86_64/rootdir/pc-modprobe.sh).
+---
+diff --git a/kernel/module/kmod.c b/kernel/module/kmod.c
+index a25dccdf7..eea3b8afe 100644
+--- a/kernel/module/kmod.c
++++ b/kernel/module/kmod.c
+@@ -143,7 +143,11 @@ int __request_module(bool wait, const char *fmt, ...)
+ 	 */
+ 	WARN_ON_ONCE(wait && current_is_async());
+ 
+-	if (!modprobe_path[0])
++	/*
++	 * With one fixed helper the path is only argv[0]: Android's init clears it at boot and gives it back
++	 * later, and a driver probing in between (ueventd loads them meanwhile) would lose its request.
++	 */
++	if (!IS_ENABLED(CONFIG_STATIC_USERMODEHELPER) && !modprobe_path[0])
+ 		return -ENOENT;
+ 
+ 	va_start(args, fmt);

@@ -1,0 +1,8 @@
+// pc-mixer: the sound card's playback levels at boot (pc-audio.sh).
+cc_binary {
+    name: "pc-mixer",
+    vendor: true,
+    srcs: ["pc-mixer.c"],
+    shared_libs: ["libtinyalsa"],
+    cflags: ["-Wall", "-Wextra", "-Werror"],
+}

@@ -12,6 +12,8 @@ on early-init
 on post-fs
     # Modules no uevent asks for and unblocked radios before the framework starts (pc-drivers.sh).
     exec - root root -- /system/bin/sh /vendor/bin/pc-drivers.sh
+    # The analog sound card as card 0 and its levels up, once the codecs answer (pc-audio.sh).
+    exec_background - root root -- /system/bin/sh /vendor/bin/pc-audio.sh
 
 on fs
     # pc-init (the initrd) mounted the system and /data before Android started; there is nothing left

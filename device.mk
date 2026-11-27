@@ -57,7 +57,8 @@ PRODUCT_COPY_FILES += \
     device/pc/pc_x86_64/rootdir/fstab.pc:$(TARGET_COPY_OUT_VENDOR)/etc/fstab.pc \
     device/pc/pc_x86_64/rootdir/ueventd.rc:$(TARGET_COPY_OUT_VENDOR)/etc/ueventd.rc \
     device/pc/pc_x86_64/rootdir/pc-modprobe.sh:$(TARGET_COPY_OUT_VENDOR)/bin/pc-modprobe.sh \
-    device/pc/pc_x86_64/rootdir/pc-drivers.sh:$(TARGET_COPY_OUT_VENDOR)/bin/pc-drivers.sh
+    device/pc/pc_x86_64/rootdir/pc-drivers.sh:$(TARGET_COPY_OUT_VENDOR)/bin/pc-drivers.sh \
+    device/pc/pc_x86_64/rootdir/pc-audio.sh:$(TARGET_COPY_OUT_VENDOR)/bin/pc-audio.sh
 
 # X11 for every Linux container (pc-containerd mounts it at /run/pc-x11): Xwayland, xwayland-satellite,
 # xkbcomp and dbus-daemon with their own libraries, built by packages/apps/PcWayland/x11/build_bundle.sh.
@@ -125,7 +126,8 @@ PRODUCT_PACKAGES += android.hardware.lights-service.pc
 # Audio: AOSP's AIDL audio HAL over ALSA (HDA and USB), effects and policy.
 PRODUCT_PACKAGES += \
     com.android.hardware.audio \
-    android.hardware.audio.parameter_parser.example_service
+    android.hardware.audio.parameter_parser.example_service \
+    pc-mixer
 PRODUCT_SYSTEM_EXT_PROPERTIES += ro.audio.ihaladaptervendorextension_enabled=true
 $(call inherit-product, frameworks/av/services/audiopolicy/audio_policy_config_vendor_1.mk)
 $(call inherit-product, hardware/interfaces/audio/aidl/default/audio_effects.mk)
