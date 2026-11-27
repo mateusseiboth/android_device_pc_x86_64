@@ -129,6 +129,11 @@ PRODUCT_PACKAGES += \
     android.hardware.audio.parameter_parser.example_service \
     pc-mixer
 PRODUCT_SYSTEM_EXT_PROPERTIES += ro.audio.ihaladaptervendorextension_enabled=true
+
+# WebView: 64-bit renderers for 64-bit apps. The prebuilt WebView asks for a 32-bit primary ABI
+# (use32bitAbi), and on x86 Chromium's 32-bit renderer sandbox kills the renderer on bionic's direct
+# shutdown syscall: Jelly crashed when a YouTube video started (frameworks/base pc, PackageAbiHelperImpl).
+PRODUCT_SYSTEM_EXT_PROPERTIES += ro.pm.ignore_32bit_abi_preference=true
 $(call inherit-product, frameworks/av/services/audiopolicy/audio_policy_config_vendor_1.mk)
 $(call inherit-product, hardware/interfaces/audio/aidl/default/audio_effects.mk)
 PRODUCT_COPY_FILES += \
@@ -181,9 +186,11 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES += \
     PcWayland
 
-# Desktop apps: task manager, diagnostics (also Settings > About hardware rows), text editor, viewer, and
-# Files (the file manager; DocumentsUI stays the system file picker).
+# Desktop apps: task manager, diagnostics (also Settings > About hardware rows), text editor, viewer,
+# Files (the file manager; DocumentsUI stays the system file picker), and the clipboard history behind
+# the status bar's clipboard button.
 PRODUCT_PACKAGES += \
+    PcClipboard \
     PcTaskManager \
     PcDiagnostics \
     PcTextEditor \

@@ -19,6 +19,9 @@ TARGET_USERIMAGES_USE_EXT4 := true
 # pc-init loop-mounts system.img as is, so it must be raw ext4, not Android's sparse format.
 TARGET_USERIMAGES_SPARSE_EXT_DISABLED := true
 BOARD_SYSTEMIMAGE_FILE_SYSTEM_TYPE := ext4
+# Free room in system.img: a file changed in place (debugfs, a hand fix on an installed PC) needs blocks
+# to land in, and an image made exactly full has none.
+BOARD_SYSTEMIMAGE_PARTITION_RESERVED_SIZE := 67108864
 BOARD_USERDATAIMAGE_PARTITION_SIZE := 4294967296
 # Only for the /metadata mount point in the root: pc-init mounts the install's metadata/ folder there
 # (RAM on the live ISO); apexd keeps its sessions and init the boot reasons in it.

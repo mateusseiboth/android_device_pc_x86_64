@@ -31,6 +31,7 @@
   <project path="packages/apps/PcTextEditor" name="android_packages_apps_PcTextEditor" remote="pc" revision="lineage-24.0" />
   <project path="packages/apps/PcViewer" name="android_packages_apps_PcViewer" remote="pc" revision="lineage-24.0" />
   <project path="packages/apps/PcFiles" name="android_packages_apps_PcFiles" remote="pc" revision="lineage-24.0" />
+  <project path="packages/apps/PcClipboard" name="android_packages_apps_PcClipboard" remote="pc" revision="lineage-24.0" />
   <project path="packages/apps/PcLogin" name="android_packages_apps_PcLogin" remote="pc" revision="lineage-24.0" />
   <!-- Linux containers: the Terminal app and pc-containerd. -->
   <project path="packages/apps/PcTerminal" name="android_packages_apps_PcTerminal" remote="pc" revision="lineage-24.0" />
