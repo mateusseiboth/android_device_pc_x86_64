@@ -17,6 +17,11 @@
   <!-- Desktop UI (Googlebook-like): WM Shell/SystemUI and Launcher3 changes, overlays and flags. -->
   <remove-project name="LineageOS/android_frameworks_base" />
   <project path="frameworks/base" name="android_frameworks_base" remote="pc" revision="pc" />
+  <!-- Connectivity: the Linux containers' uids keep local network access (Android 17 blocks the LAN for
+       uids without the permission, and the containers' uids belong to no package). -->
+  <remove-project name="LineageOS/android_packages_modules_Connectivity" />
+  <project path="packages/modules/Connectivity" name="android_packages_modules_Connectivity" remote="pc" revision="pc" />
+
   <!-- SurfaceFlinger: with two screens the internal one (the desktop's) paces and presents first. -->
   <remove-project name="LineageOS/android_frameworks_native" />
   <project path="frameworks/native" name="android_frameworks_native" remote="pc" revision="pc" />
