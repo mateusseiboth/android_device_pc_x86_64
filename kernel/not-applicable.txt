@@ -12,3 +12,5 @@ CONFIG_NF_CT_PROTO_UDPLITE
 CONFIG_SCHED_DEBUG
 # Selected by nouveau (kept for NVIDIA GPUs); only caches firmware across suspend:
 CONFIG_FW_CACHE
+# Turned on for the Linux containers (pc.config): Steam, Wine/Proton and X11's MIT-SHM need System V IPC.
+CONFIG_SYSVIPC
