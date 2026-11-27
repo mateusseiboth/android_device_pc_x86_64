@@ -17,6 +17,9 @@
   <!-- Desktop UI (Googlebook-like): WM Shell/SystemUI and Launcher3 changes, overlays and flags. -->
   <remove-project name="LineageOS/android_frameworks_base" />
   <project path="frameworks/base" name="android_frameworks_base" remote="pc" revision="pc" />
+  <!-- SurfaceFlinger: with two screens the internal one (the desktop's) paces and presents first. -->
+  <remove-project name="LineageOS/android_frameworks_native" />
+  <project path="frameworks/native" name="android_frameworks_native" remote="pc" revision="pc" />
   <remove-project name="LineageOS/android_packages_apps_Launcher3" />
   <project path="packages/apps/Launcher3" name="android_packages_apps_Launcher3" remote="pc" revision="pc" />
   <project path="vendor/pc/ui" name="android_vendor_pc_ui" remote="pc" revision="lineage-24.0" />

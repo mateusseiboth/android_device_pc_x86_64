@@ -134,6 +134,11 @@ PRODUCT_SYSTEM_EXT_PROPERTIES += ro.audio.ihaladaptervendorextension_enabled=tru
 # (use32bitAbi), and on x86 Chromium's 32-bit renderer sandbox kills the renderer on bionic's direct
 # shutdown syscall: Jelly crashed when a YouTube video started (frameworks/base pc, PackageAbiHelperImpl).
 PRODUCT_SYSTEM_EXT_PROPERTIES += ro.pm.ignore_32bit_abi_preference=true
+
+# Two screens: the internal display (where the desktop is) paces SurfaceFlinger, not the external one;
+# with screens out of phase only the pacesetter's frames reach the screen on time.
+PRODUCT_SYSTEM_EXT_PROPERTIES += ro.surface_flinger.pacesetter_prefers_internal=true
+
 $(call inherit-product, frameworks/av/services/audiopolicy/audio_policy_config_vendor_1.mk)
 $(call inherit-product, hardware/interfaces/audio/aidl/default/audio_effects.mk)
 PRODUCT_COPY_FILES += \
