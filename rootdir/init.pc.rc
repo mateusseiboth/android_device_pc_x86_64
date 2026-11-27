@@ -4,11 +4,14 @@ on early-init
     # init.rc clears the kernel's module loader; drivers that load helpers by name need it back
     # (iwlwifi's iwlmvm, which makes wlan0, and Intel sound's machine drivers).
     write /proc/sys/kernel/modprobe /vendor/bin/pc-modprobe.sh
+    # Screen density: without it SurfaceFlinger falls back to a TV's (213), and a 1080p laptop screen
+    # shows everything a third bigger. 160 draws a PC's pixels 1:1; androidboot.lcd_density=N on the
+    # kernel command line picks another, and Settings > Display size still scales from it.
+    setprop ro.sf.lcd_density ${ro.boot.lcd_density:-160}
 
 on post-fs
-    # The Wi-Fi module sets up its nl80211 once, when the framework starts: without cfg80211 loaded by
-    # then (a driver that loads late, a USB adapter plugged in later), Wi-Fi never turns on.
-    exec - root root -- /system/bin/modprobe -d /vendor/lib/modules cfg80211
+    # Modules no uevent asks for and unblocked radios before the framework starts (pc-drivers.sh).
+    exec - root root -- /system/bin/sh /vendor/bin/pc-drivers.sh
 
 on fs
     # pc-init (the initrd) mounted the system and /data before Android started; there is nothing left

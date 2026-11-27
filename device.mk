@@ -56,7 +56,8 @@ PRODUCT_COPY_FILES += \
     device/pc/pc_x86_64/rootdir/pc-bootlog.sh:$(TARGET_COPY_OUT_VENDOR)/bin/pc-bootlog.sh \
     device/pc/pc_x86_64/rootdir/fstab.pc:$(TARGET_COPY_OUT_VENDOR)/etc/fstab.pc \
     device/pc/pc_x86_64/rootdir/ueventd.rc:$(TARGET_COPY_OUT_VENDOR)/etc/ueventd.rc \
-    device/pc/pc_x86_64/rootdir/pc-modprobe.sh:$(TARGET_COPY_OUT_VENDOR)/bin/pc-modprobe.sh
+    device/pc/pc_x86_64/rootdir/pc-modprobe.sh:$(TARGET_COPY_OUT_VENDOR)/bin/pc-modprobe.sh \
+    device/pc/pc_x86_64/rootdir/pc-drivers.sh:$(TARGET_COPY_OUT_VENDOR)/bin/pc-drivers.sh
 
 # X11 for every Linux container (pc-containerd mounts it at /run/pc-x11): Xwayland, xwayland-satellite,
 # xkbcomp and dbus-daemon with their own libraries, built by packages/apps/PcWayland/x11/build_bundle.sh.
