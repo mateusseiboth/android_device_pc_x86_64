@@ -29,7 +29,10 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <ftw.h>
 #include <limits.h>
+#include <poll.h>
+#include <time.h>
 #include <linux/loop.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -473,6 +476,78 @@ static int is_candidate(const char *name)
 
 static int find_in_isos(const struct options *o, struct plan *p);
 
+/* ---- an update waiting for the next boot ------------------------------------------------- */
+
+/* pc-installd leaves a downloaded update as system.new.img or system.new/, written in full under
+ * another name first. Before the system is mounted the new one takes the system's place and the
+ * system becomes system.old, which the "previous system" boot entry starts. Every step is a rename
+ * on the same partition: a power cut leaves the old system or the new one, and the next boot ends
+ * the job. */
+static int remove_entry(const char *path, const struct stat *st, int flag, struct FTW *ftw)
+{
+	(void)st;
+	(void)flag;
+	(void)ftw;
+	return remove(path);
+}
+
+static int remove_tree(const char *path)
+{
+	struct stat st;
+	if (lstat(path, &st))
+		return errno == ENOENT ? 0 : -1;
+	if (!S_ISDIR(st.st_mode))
+		return unlink(path);
+	return nftw(path, remove_entry, 16, FTW_DEPTH | FTW_PHYS);
+}
+
+static void system_path(const char *root, const struct options *o, const char *base, const char *suffix,
+			char *out, size_t len)
+{
+	snprintf(out, len, "%s/%s/%s%s", root, o->src, base, suffix);
+}
+
+/* Renames every form of the system called `from` to `to` (system.img to system.old.img, system/ to
+ * system.old/). */
+static void rename_system(const char *root, const struct options *o, const char *from, const char *to)
+{
+	for (size_t i = 0; i < sizeof SYSTEM_FORMS / sizeof *SYSTEM_FORMS; i++) {
+		char a[PATH_MAX * 2], b[PATH_MAX * 2];
+		system_path(root, o, from, SYSTEM_FORMS[i].suffix, a, sizeof a);
+		system_path(root, o, to, SYSTEM_FORMS[i].suffix, b, sizeof b);
+		if (!access(a, F_OK) && rename(a, b))
+			say("cannot rename %s: %s", a, strerror(errno));
+	}
+}
+
+static int apply_staged_update(const char *root, const struct options *o)
+{
+	if (o->live || o->previous)
+		return 0;
+	for (size_t i = 0; i < sizeof SYSTEM_FORMS / sizeof *SYSTEM_FORMS; i++) {
+		char staged[PATH_MAX * 2], target[PATH_MAX * 2];
+		system_path(root, o, "system.new", SYSTEM_FORMS[i].suffix, staged, sizeof staged);
+		if (!SYSTEM_FORMS[i].exists(staged))
+			continue;
+		for (size_t j = 0; j < sizeof SYSTEM_FORMS / sizeof *SYSTEM_FORMS; j++) {
+			char old[PATH_MAX * 2];
+			system_path(root, o, "system.old", SYSTEM_FORMS[j].suffix, old, sizeof old);
+			if (remove_tree(old))
+				say("cannot remove %s: %s", old, strerror(errno));
+		}
+		rename_system(root, o, "system", "system.old");
+		system_path(root, o, "system", SYSTEM_FORMS[i].suffix, target, sizeof target);
+		if (rename(staged, target)) {
+			say("cannot apply the update: %s", strerror(errno));
+			rename_system(root, o, "system.old", "system");
+			return 0;
+		}
+		say("update applied: %s", target + strlen(root) + 1);
+		return 1;
+	}
+	return 0;
+}
+
 /* Mount every block device in turn until one holds the install folder, directly or in our ISO. */
 static int find_install(const struct options *o, struct plan *p)
 {
@@ -676,6 +751,92 @@ static void keep_live_logs(const struct plan *p)
 	say("boot logs in %s on the stick", LIVE_LOGS);
 }
 
+/* ---- the kernel's log of this boot, from the start ------------------------------------------- */
+
+/* Android writes its logs to /metadata/pc-logs from post-fs-data on (pc-bootlog.sh); a boot that hangs
+ * before that, with a black screen, left nothing. pc-init starts this boot's folder (boot-1, the older
+ * ones moved down) and leaves a child copying the kernel's log, Android's early init included, to
+ * boot-1/kernel.txt, synced every second so a hard reset keeps it. It stops at KMSG_MAX bytes: by then
+ * logcat keeps the kernel's log too. boot-1/boot_id tells pc-bootlog.sh this boot's folder exists. */
+#define BOOT_LOGS ANDROID_ROOT "/metadata/pc-logs"
+#define KMSG_MAX (4 << 20)
+#define LOG_FOLDERS 3
+
+static void rotate_boot_logs(void)
+{
+	char from[PATH_MAX], to[PATH_MAX];
+	snprintf(from, sizeof from, BOOT_LOGS "/boot-%d", LOG_FOLDERS);
+	remove_tree(from);
+	for (int i = LOG_FOLDERS - 1; i >= 1; i--) {
+		snprintf(from, sizeof from, BOOT_LOGS "/boot-%d", i);
+		snprintf(to, sizeof to, BOOT_LOGS "/boot-%d", i + 1);
+		rename(from, to);
+	}
+	mkdir(BOOT_LOGS, 0700);
+	mkdir(BOOT_LOGS "/boot-1", 0700);
+}
+
+/* "6,1234,5678901,-;text" becomes "[    5.678901] text". */
+static size_t format_kmsg(const char *record, size_t len, char *out, size_t cap)
+{
+	unsigned long long usec = 0;
+	const char *text = memchr(record, ';', len);
+	if (!text || sscanf(record, "%*u,%*u,%llu", &usec) != 1)
+		return 0;
+	text++;
+	int n = snprintf(out, cap, "[%5llu.%06llu] %.*s", usec / 1000000, usec % 1000000,
+			 (int)(len - (size_t)(text - record)), text);
+	return n > 0 && (size_t)n < cap ? (size_t)n : 0;
+}
+
+static void copy_kmsg(int kmsg, int out)
+{
+	char record[8192], line[8400];
+	size_t written = 0;
+	time_t synced = time(NULL);
+	struct pollfd pfd = { .fd = kmsg, .events = POLLIN };
+	while (written < KMSG_MAX) {
+		if (poll(&pfd, 1, 1000) > 0) {
+			ssize_t n = read(kmsg, record, sizeof record);
+			if (n < 0 && errno != EPIPE && errno != EINTR)
+				break;
+			size_t len = n > 0 ? format_kmsg(record, (size_t)n, line, sizeof line) : 0;
+			if (len && write(out, line, len) == (ssize_t)len)
+				written += len;
+		}
+		if (time(NULL) != synced) {
+			fdatasync(out);
+			synced = time(NULL);
+		}
+	}
+	fdatasync(out);
+}
+
+static void start_kernel_log(void)
+{
+	rotate_boot_logs();
+	char boot_id[64] = "";
+	read_file("/proc/sys/kernel/random/boot_id", boot_id, sizeof boot_id);
+	int id = open(BOOT_LOGS "/boot-1/boot_id", O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0600);
+	if (id >= 0) {
+		if (write(id, boot_id, strlen(boot_id)) < 0)
+			say("cannot write the boot id: %s", strerror(errno));
+		close(id);
+	}
+	int kmsg = open("/dev/kmsg", O_RDONLY | O_CLOEXEC);
+	int out = open(BOOT_LOGS "/boot-1/kernel.txt", O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0600);
+	if (kmsg < 0 || out < 0) {
+		say("no kernel log on disk: %s", strerror(errno));
+	} else if (fork() == 0) {
+		copy_kmsg(kmsg, out);
+		_exit(0);
+	}
+	if (kmsg >= 0)
+		close(kmsg);
+	if (out >= 0)
+		close(out);
+}
+
 static int stage1(void)
 {
 	mkdir("/proc", 0755);
@@ -704,6 +865,9 @@ static int stage1(void)
 	}
 	if (strcmp(p.data_kind, "tmpfs"))
 		mount(NULL, SRC_MOUNT, NULL, MS_REMOUNT, NULL);
+	/* The update may change the system's form (an image now, a folder before). */
+	if (apply_staged_update(p.root, &o) && make_plan(p.root, &o, &p))
+		halt_with("the updated system is missing");
 
 	if (mount_root(&p))
 		halt_with("cannot mount the system");
@@ -712,6 +876,7 @@ static int stage1(void)
 	if (mount_kind(p.metadata_kind, p.root, p.metadata, ANDROID_ROOT "/metadata", MS_NOSUID | MS_NODEV | MS_NOATIME))
 		say("cannot mount /metadata");
 	keep_live_logs(&p);
+	start_kernel_log();
 	say("system %s (%s), data %s (%s), %d add-ons; starting Android", p.system, p.system_kind, p.data,
 	    p.data_kind, p.addon_count);
 
