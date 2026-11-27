@@ -19,6 +19,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -117,8 +118,38 @@ def tree_bytes(root):
     return sum(p.stat().st_size for p in root.rglob('*') if p.is_file() and not p.is_symlink())
 
 
-def add_overlay(paths, work):
-    """The files as an ext4 image whose root mirrors the Android root (system/...)."""
+# A file the base image lacks gets the label /system's files have.
+DEFAULT_LABEL = 'u:object_r:system_file:s0'
+LABEL_LINE = re.compile(r'^security\.selinux \(\d+\) = "([^"\\]*)')
+
+
+def read_labels(image, entries):
+    """Each entry's SELinux label in image (None when it is not there), with one debugfs run."""
+    commands = ''.join(f'ea_get "{entry}" security.selinux\n' for entry in entries)
+    out = subprocess.run(['debugfs', '-f', '-', str(image)], input=commands, capture_output=True, text=True).stdout
+    labels, current = {}, None
+    for line in out.splitlines():
+        if line.startswith('debugfs: ea_get '):
+            current = line.split('"')[1]
+            labels[current] = None
+        elif current and (match := LABEL_LINE.match(line)):
+            labels[current] = match.group(1)
+    return labels
+
+
+def label_overlay(image, stage, base):
+    """Gives every file and folder of the overlay the label it has in the base system, as the build would.
+    Without labels a patch's files read as unlabeled, which only works while SELinux is permissive."""
+    entries = ['/'] + [f'/{path.relative_to(stage)}' for path in sorted(stage.rglob('*'))]
+    labels = read_labels(base, entries)
+    commands = ''.join(f'ea_set "{entry}" security.selinux "{labels.get(entry) or DEFAULT_LABEL}"\n'
+                       for entry in entries)
+    subprocess.run(['debugfs', '-w', '-f', '-', str(image)], input=commands, capture_output=True, text=True,
+                   check=True)
+
+
+def add_overlay(paths, base, work):
+    """The files as an ext4 image whose root mirrors the Android root (system/...), labeled like base."""
     stage = work / 'overlay'
     stage.mkdir()
     stage_files(paths, stage)
@@ -127,6 +158,7 @@ def add_overlay(paths, work):
     size_kib = (tree_bytes(stage) * 11 // 10 + OVERLAY_SLACK) >> 10
     subprocess.run(['mke2fs', '-q', '-t', 'ext4', '-O', '^has_journal', '-L', 'pc-patch', '-d', str(stage),
                     str(image), f'{size_kib}K'], check=True)
+    label_overlay(image, stage, base)
     shutil.rmtree(stage)
     return add_compressed(image, 'overlay.img.zst', 'overlay', work)
 
@@ -167,7 +199,7 @@ def build_update(a, keys, work):
 def build_patch(a, keys, work):
     require_raw(a.base)
     paths = list(a.file) + ([MODULES] if a.kernel else [])
-    files = ([add_overlay(paths, work)] if paths else []) + \
+    files = ([add_overlay(paths, a.base, work)] if paths else []) + \
         ([add_kernel(keys, a.kernel, work)] if a.kernel else []) + \
         ([add_initrd(work)] if a.initrd else [])
     if not files:
