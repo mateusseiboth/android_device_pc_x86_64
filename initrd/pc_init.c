@@ -420,6 +420,7 @@ static int print_live_logs(void)
 	return 0;
 }
 
+#define LAYERS_SOURCE "pc-layers"
 #define INIT_PATH "/system/bin/init"
 #define INIT_STAGE "selinux_setup"
 
@@ -1057,7 +1058,10 @@ static int mount_root(struct plan *p)
 	p->addon_count = mounted;
 	char options[512];
 	build_lowerdir(mounted, options, sizeof options);
-	if (mounted && !mount("overlay", ANDROID_ROOT, "overlay", MS_RDONLY, options))
+	/* The source must not be "overlay": on a debuggable build Android's init takes every mount whose source
+	 * is "overlay" for one of adb remount's, unmounts it and mounts it again from inside the new root, where
+	 * these lower folders do not exist; it then aborts and the kernel panics (exit code 0x7f00). */
+	if (mounted && !mount(LAYERS_SOURCE, ANDROID_ROOT, "overlay", MS_RDONLY, options))
 		return 0;
 	if (mounted)
 		say("add-ons left out: the overlay does not mount: %s", strerror(errno));
