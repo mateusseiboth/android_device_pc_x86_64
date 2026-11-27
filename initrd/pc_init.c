@@ -40,6 +40,9 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <linux/kd.h>
+#include <linux/fb.h>
+#include <stdint.h>
+#include <sys/mman.h>
 #include <grp.h>
 #include <sys/mount.h>
 #include <sys/sysmacros.h>
@@ -110,6 +113,7 @@ struct plan {
 	const char *logs; /* the live boot logs' folder on the stick; empty when /metadata keeps them */
 	char addons[MAX_ADDONS][PATH_MAX]; /* relative to root, in name order */
 	int addon_count;
+	int patch_count; /* the first patch_count layers are patches, all or none */
 };
 
 static int is_file(const char *path) { struct stat st; return !stat(path, &st) && S_ISREG(st.st_mode); }
@@ -170,21 +174,17 @@ static void find_metadata(const struct options *o, struct plan *p)
 
 static int by_name(const void *a, const void *b) { return strcmp(a, b); }
 
-/* Add-ons: the .img files in the install folder's addons/ (the installer's choice of Google services), laid over
- * the system in name order. An update replaces the system and keeps them; the live ISO has none. */
-static void find_addons(const char *root, const struct options *o, struct plan *p)
+/* The .img files of one folder of the install folder, in name order, appended to the overlay's layers. */
+static void add_layer_images(const char *root, const struct options *o, const char *folder, struct plan *p)
 {
-	p->addon_count = 0;
-	if (o->live)
-		return;
 	char dir[PATH_MAX * 2];
-	snprintf(dir, sizeof dir, "%s/%s/addons", root, o->src);
+	snprintf(dir, sizeof dir, "%s/%s/%s", root, o->src, folder);
 	DIR *d = opendir(dir);
 	if (!d)
 		return;
 	char names[MAX_ADDONS][NAME_MAX + 1];
 	int count = 0;
-	for (struct dirent *e; (e = readdir(d)) && count < MAX_ADDONS;) {
+	for (struct dirent *e; (e = readdir(d)) && p->addon_count + count < MAX_ADDONS;) {
 		size_t len = strlen(e->d_name);
 		char path[PATH_MAX * 3];
 		snprintf(path, sizeof path, "%s/%s", dir, e->d_name);
@@ -194,8 +194,24 @@ static void find_addons(const char *root, const struct options *o, struct plan *
 	closedir(d);
 	qsort(names, count, sizeof *names, by_name);
 	for (int i = 0; i < count; i++)
-		snprintf(p->addons[i], PATH_MAX, "%s/addons/%s", o->src, names[i]);
-	p->addon_count = count;
+		snprintf(p->addons[p->addon_count + i], PATH_MAX, "%s/%s/%s", o->src, folder, names[i]);
+	p->addon_count += count;
+}
+
+/* The layers over the system, the first on top: the patches (patches/, written by pc-installd for one build,
+ * not for the previous system), then the add-ons (addons/, the installer's choice of Google services), each
+ * folder in name order. An update replaces the system, keeps the add-ons and removes the patches; the live
+ * ISO has neither. */
+static void find_addons(const char *root, const struct options *o, struct plan *p)
+{
+	p->addon_count = 0;
+	p->patch_count = 0;
+	if (o->live)
+		return;
+	if (!o->previous)
+		add_layer_images(root, o, "patches", p);
+	p->patch_count = p->addon_count;
+	add_layer_images(root, o, "addons", p);
 }
 
 /* The overlay's lowerdir: the add-ons over the system, the first one on top; empty without add-ons. */
@@ -520,6 +536,156 @@ static void rename_system(const char *root, const struct options *o, const char 
 	}
 }
 
+static void read_file(const char *path, char *out, size_t len);
+
+/* ---- the update screen ------------------------------------------------------------------- */
+
+/* While an update goes in, the screen shows the installer's capybara and "Updating the system" in the
+ * language the person used when they applied it (update-locale, written by pc-installd). The images are
+ * rendered by the build into the initrd (update_screen.py): "PCIM", width, height, straight RGBA. */
+#define UPDATE_ASSETS "/update"
+#define UPDATE_BACKGROUND 0x17, 0x12, 0x1f
+#define UPDATE_MIN_SECONDS 2
+
+struct image {
+	uint32_t w, h;
+	uint8_t *rgba;
+};
+
+struct screen {
+	uint8_t *pixels;
+	size_t size;
+	struct fb_var_screeninfo var;
+	uint32_t stride;
+};
+
+static int load_image(const char *path, struct image *img)
+{
+	*img = (struct image){ 0 };
+	int fd = open(path, O_RDONLY | O_CLOEXEC);
+	uint8_t head[12];
+	if (fd < 0 || read(fd, head, sizeof head) != sizeof head || memcmp(head, "PCIM", 4)) {
+		if (fd >= 0)
+			close(fd);
+		return -1;
+	}
+	memcpy(&img->w, head + 4, 4);
+	memcpy(&img->h, head + 8, 4);
+	size_t len = (size_t)img->w * img->h * 4;
+	img->rgba = img->w && img->h && img->w < 8192 && img->h < 8192 ? malloc(len) : NULL;
+	int ok = img->rgba && read(fd, img->rgba, len) == (ssize_t)len;
+	close(fd);
+	if (!ok) {
+		free(img->rgba);
+		img->rgba = NULL;
+	}
+	return ok ? 0 : -1;
+}
+
+static uint32_t pack_pixel(const struct fb_var_screeninfo *v, uint32_t r, uint32_t g, uint32_t b)
+{
+	return (r >> (8 - v->red.length)) << v->red.offset | (g >> (8 - v->green.length)) << v->green.offset |
+	       (b >> (8 - v->blue.length)) << v->blue.offset;
+}
+
+static void fill_screen(struct screen *sc)
+{
+	const uint8_t bg[] = { UPDATE_BACKGROUND };
+	uint32_t px = pack_pixel(&sc->var, bg[0], bg[1], bg[2]);
+	for (uint32_t y = 0; y < sc->var.yres; y++) {
+		uint32_t *row = (uint32_t *)(sc->pixels + (size_t)y * sc->stride);
+		for (uint32_t x = 0; x < sc->var.xres; x++)
+			row[x] = px;
+	}
+}
+
+/* Blends the image over the background, scaled by a whole factor, its top edge at y, centered. */
+static void draw_image(struct screen *sc, const struct image *img, uint32_t y, uint32_t scale)
+{
+	const uint8_t bg[] = { UPDATE_BACKGROUND };
+	uint32_t w = img->w * scale, h = img->h * scale;
+	if (!img->rgba || w > sc->var.xres || y + h > sc->var.yres)
+		return;
+	uint32_t x0 = (sc->var.xres - w) / 2;
+	for (uint32_t dy = 0; dy < h; dy++) {
+		uint32_t *row = (uint32_t *)(sc->pixels + (size_t)(y + dy) * sc->stride) + x0;
+		for (uint32_t dx = 0; dx < w; dx++) {
+			const uint8_t *p = img->rgba + ((size_t)(dy / scale) * img->w + dx / scale) * 4;
+			uint32_t a = p[3];
+			uint32_t c[3];
+			for (int k = 0; k < 3; k++)
+				c[k] = (p[k] * a + bg[k] * (255 - a)) / 255;
+			row[dx] = pack_pixel(&sc->var, c[0], c[1], c[2]);
+		}
+	}
+}
+
+static int open_screen(struct screen *sc)
+{
+	int fd = open("/dev/fb0", O_RDWR | O_CLOEXEC);
+	struct fb_fix_screeninfo fix;
+	if (fd < 0)
+		return -1;
+	int ok = !ioctl(fd, FBIOGET_VSCREENINFO, &sc->var) && !ioctl(fd, FBIOGET_FSCREENINFO, &fix) &&
+		 sc->var.bits_per_pixel == 32;
+	sc->stride = fix.line_length;
+	sc->size = fix.smem_len;
+	sc->pixels = ok ? mmap(NULL, sc->size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0) : MAP_FAILED;
+	close(fd);
+	return sc->pixels == MAP_FAILED ? -1 : 0;
+}
+
+/* The language's two letters from update-locale ("pt-BR" -> "pt"), English when there is none. */
+static void read_update_language(const char *root, const struct options *o, char *lang, size_t len)
+{
+	char path[PATH_MAX * 2], locale[32] = "";
+	snprintf(path, sizeof path, "%s/%s/update-locale", root, o->src);
+	read_file(path, locale, sizeof locale);
+	unlink(path);
+	snprintf(lang, len, "%.2s", locale[0] ? locale : "en");
+	for (char *c = lang; *c; c++)
+		*c = (char)(*c | 0x20);
+}
+
+static void load_text(const char *kind, const char *lang, struct image *img)
+{
+	char path[64];
+	snprintf(path, sizeof path, UPDATE_ASSETS "/%s-%s.raw", kind, lang);
+	if (load_image(path, img)) {
+		snprintf(path, sizeof path, UPDATE_ASSETS "/%s-en.raw", kind);
+		load_image(path, img);
+	}
+}
+
+static void show_update_screen(const char *root, const struct options *o)
+{
+	char lang[8];
+	read_update_language(root, o, lang, sizeof lang);
+	struct screen sc;
+	if (open_screen(&sc)) {
+		say("updating the system (no screen to draw on)");
+		return;
+	}
+	stop_text_console();
+	struct image art, title, note;
+	load_image(UPDATE_ASSETS "/art.raw", &art);
+	load_text("title", lang, &title);
+	load_text("note", lang, &note);
+	/* Bigger on big screens: 1080 lines and less draw at 1x, 2160 at 2x. */
+	uint32_t scale = sc.var.yres >= 2000 ? 2 : 1;
+	uint32_t gap = 24 * scale;
+	uint32_t total = (art.h + title.h + note.h) * scale + 2 * gap;
+	uint32_t y = sc.var.yres > total ? (sc.var.yres - total) / 2 : 0;
+	fill_screen(&sc);
+	draw_image(&sc, &art, y, scale);
+	draw_image(&sc, &title, y + art.h * scale + gap, scale);
+	draw_image(&sc, &note, y + (art.h + title.h) * scale + 2 * gap, scale);
+	free(art.rgba);
+	free(title.rgba);
+	free(note.rgba);
+	munmap(sc.pixels, sc.size);
+}
+
 static int apply_staged_update(const char *root, const struct options *o)
 {
 	if (o->live || o->previous)
@@ -529,6 +695,8 @@ static int apply_staged_update(const char *root, const struct options *o)
 		system_path(root, o, "system.new", SYSTEM_FORMS[i].suffix, staged, sizeof staged);
 		if (!SYSTEM_FORMS[i].exists(staged))
 			continue;
+		time_t shown = time(NULL);
+		show_update_screen(root, o);
 		for (size_t j = 0; j < sizeof SYSTEM_FORMS / sizeof *SYSTEM_FORMS; j++) {
 			char old[PATH_MAX * 2];
 			system_path(root, o, "system.old", SYSTEM_FORMS[j].suffix, old, sizeof old);
@@ -543,6 +711,8 @@ static int apply_staged_update(const char *root, const struct options *o)
 			return 0;
 		}
 		say("update applied: %s", target + strlen(root) + 1);
+		while (time(NULL) - shown < UPDATE_MIN_SECONDS)
+			sleep(1);
 		return 1;
 	}
 	return 0;
@@ -710,6 +880,15 @@ static void read_file(const char *path, char *out, size_t len)
 
 /* The Android root: the system itself, or with add-ons an overlay of them over it. An add-on that
  * does not mount is left out (with the ones after it), so a bad one never keeps Android from booting. */
+static void unmount_layers(int count)
+{
+	for (int i = 0; i < count; i++) {
+		char target[64];
+		snprintf(target, sizeof target, "%s/%d", ADDON_MOUNT, i);
+		umount(target);
+	}
+}
+
 static int mount_root(struct plan *p)
 {
 	if (!p->addon_count)
@@ -718,15 +897,25 @@ static int mount_root(struct plan *p)
 	mkdir(ADDON_MOUNT, 0755);
 	if (mount_kind(p->system_kind, p->root, p->system, SYSTEM_MOUNT, MS_RDONLY))
 		return -1;
+	/* The patches go in all together or not at all; an add-on that does not mount is left out alone. */
 	int mounted = 0;
-	for (; mounted < p->addon_count; mounted++) {
+	for (int i = 0; i < p->addon_count; i++) {
 		char target[64];
 		snprintf(target, sizeof target, "%s/%d", ADDON_MOUNT, mounted);
 		mkdir(target, 0755);
-		if (mount_kind("img", p->root, p->addons[mounted], target, MS_RDONLY)) {
-			say("add-on %s left out: it does not mount", p->addons[mounted]);
-			break;
+		if (mount_kind("img", p->root, p->addons[i], target, MS_RDONLY)) {
+			say("%s left out: it does not mount", p->addons[i]);
+			if (i < p->patch_count) {
+				say("no patch applied");
+				unmount_layers(mounted);
+				mounted = 0;
+				i = p->patch_count - 1;
+			}
+			continue;
 		}
+		if (i != mounted)
+			memcpy(p->addons[mounted], p->addons[i], sizeof p->addons[i]);
+		mounted++;
 	}
 	p->addon_count = mounted;
 	char options[512];

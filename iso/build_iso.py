@@ -250,13 +250,17 @@ def is_android_sparse(image):
 
 
 def build_initrd(out, work):
-    """initrd.img: a gzip'd newc cpio with the static pc-init as /init."""
+    """initrd.img: a gzip'd newc cpio with the static pc-init as /init and the update screen's images in
+    /update (initrd/update_screen.py)."""
     root = work / 'initrd'
     root.mkdir()
     subprocess.run(['cc', '-static', '-O2', '-Wall', '-Wextra', '-Werror', '-o', str(root / 'init'),
                     str(HERE.parent / 'initrd/pc_init.c')], check=True)
-    cpio = subprocess.run(['cpio', '-o', '-H', 'newc', '--quiet'], cwd=root, input=b'init\n',
-                          capture_output=True, check=True).stdout
+    sys.path.insert(0, str(HERE.parent / 'initrd'))
+    from update_screen import write_assets  # noqa: E402 (PIL is only needed here)
+    names = ['init', 'update'] + write_assets(root / 'update')
+    cpio = subprocess.run(['cpio', '-o', '-H', 'newc', '--quiet'], cwd=root, input=''.join(
+        f'{name}\n' for name in names).encode(), capture_output=True, check=True).stdout
     out.write_bytes(gzip.compress(cpio))
 
 
