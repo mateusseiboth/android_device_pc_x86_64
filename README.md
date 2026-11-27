@@ -27,7 +27,14 @@ repo init -u https://github.com/LineageOS/android.git -b lineage-24.0 --git-lfs
 mkdir -p .repo/local_manifests
 curl -o .repo/local_manifests/pc.xml https://raw.githubusercontent.com/mateusseiboth/android_device_pc_x86_64/lineage-24.0/local_manifest.xml
 repo sync
+device/pc/pc_x86_64/patches/apply.sh
 ```
+
+`patches/apply.sh` applies the few fixes this tree carries for projects it does not fork
+(`patches/<project path>/*.patch`, with `git am`, so the original author stays); run it again after every
+`repo sync`, it skips what a project already has. Today: Mesa's BLORP fix for Sandy Bridge and older
+Intel graphics from Mesa 26.1.2 (garbled text and images on Mesa 26.1,
+[mesa#15435](https://gitlab.freedesktop.org/mesa/mesa/-/issues/15435)).
 
 Forks: [minigbm](https://github.com/mateusseiboth/android_external_minigbm) keeps GloDroid's sources
 (from android-generic) with Android 17's build files plus AIDL/stable-C `gbm_mesa` variants;

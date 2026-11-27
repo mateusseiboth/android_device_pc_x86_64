@@ -1,0 +1,52 @@
+From dc31fee61368d568d058449806e0616ca4b7558d Mon Sep 17 00:00:00 2001
+From: Nanley Chery <nanley.g.chery@intel.com>
+Date: Mon, 18 May 2026 08:15:18 -0400
+Subject: [PATCH] intel/blorp: Halve max bpp for some redescribed blits
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+We cannot use 128bpp formats with Y-tiling on gfx6 and prior.
+
+Fixes: eb8883f3ef9 ("intel/blorp: Redescribe surfaces for copies")
+Closes: https://gitlab.freedesktop.org/mesa/mesa/-/issues/15435
+Reviewed-by: Tapani Pälli <tapani.palli@intel.com>
+Reviewed-by: Lionel Landwerlin <lionel.g.landwerlin@intel.com>
+(cherry picked from commit da547a1a4d02519c3c558f1506476dee331898c9)
+
+LineageOS for PCs: picked from Mesa 26.1.2 (26f3766f) for Sandy Bridge's
+garbled text and images on Mesa 26.1.
+
+Change-Id: I7ba75c145f518c940f2f110bc193c2ddd7795b99
+---
+ src/intel/blorp/blorp_blit.c | 13 ++++++++++++-
+ 1 file changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/src/intel/blorp/blorp_blit.c b/src/intel/blorp/blorp_blit.c
+index 4c11105..b7ed493 100644
+--- a/src/intel/blorp/blorp_blit.c
++++ b/src/intel/blorp/blorp_blit.c
+@@ -3132,8 +3132,19 @@ get_max_format_scale(const struct isl_device *isl_dev,
+    uint32_t lod1_w = u_minify(info->surf.logical_level0_px.width, 1);
+    uint32_t phys_lod1_w = align(lod1_w, info->surf.image_alignment_el.w);
+ 
++   int max_bpb = 128;
++   /* From the Sandybridge PRM, Volume 1, Part 2, page 32:
++    *
++    *    "NOTE: 128BPE Format Color Buffer ( render target ) MUST be either
++    *     TileX or Linear."
++    *
++    * This is necessary all the way back to 965, but is permitted on Gfx7+.
++    */
++   if (ISL_GFX_VER(isl_dev) < 7 && info->surf.tiling == ISL_TILING_Y0)
++      max_bpb = 64;
++
+    /* Find the format size which satisfies alignment requirements. */
+-   for (int max_bpb = 128; max_bpb >= surf_fmtl->bpb; max_bpb /= 2) {
++   for (; max_bpb >= surf_fmtl->bpb; max_bpb /= 2) {
+       if (info->view.base_level >= 1 &&
+           phys_lod1_w * surf_fmtl->bpb % max_bpb)
+          continue;
+-- 
+2.56.0
+
