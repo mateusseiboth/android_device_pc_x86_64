@@ -41,6 +41,8 @@
 #include <sys/ioctl.h>
 #include <linux/kd.h>
 #include <linux/fb.h>
+#include <drm/drm.h>
+#include <drm/drm_mode.h>
 #include <stdint.h>
 #include <sys/mman.h>
 #include <grp.h>
@@ -552,7 +554,16 @@ struct image {
 	uint8_t *rgba;
 };
 
+/* Two ways to the screen. The kernel's own fbdev device (/dev/fb0) when it has one: the frame is drawn in
+ * memory and written in one go. Otherwise DRM (our kernel leaves CONFIG_FB_DEVICE out): at this point of the
+ * boot the only card is simpledrm, on the firmware's framebuffer; pc-init is its first client, hence its
+ * master, and shows a dumb buffer on the first connected output. Closing the card gives the screen back to
+ * the kernel console. */
 struct screen {
+	int fd;
+	int is_drm;
+	struct drm_mode_crtc crtc; /* DRM: what shows the buffer, set once the frame is drawn */
+	uint32_t connector;
 	uint8_t *pixels;
 	size_t size;
 	struct fb_var_screeninfo var;
@@ -620,19 +631,136 @@ static void draw_image(struct screen *sc, const struct image *img, uint32_t y, u
 	}
 }
 
-static int open_screen(struct screen *sc)
+/* Returns why fb0 cannot be drawn on, or NULL. */
+static const char *open_fbdev(struct screen *sc)
 {
-	int fd = open("/dev/fb0", O_RDWR | O_CLOEXEC);
 	struct fb_fix_screeninfo fix;
-	if (fd < 0)
+	sc->fd = open("/dev/fb0", O_RDWR | O_CLOEXEC);
+	if (sc->fd < 0)
+		return "no /dev/fb0";
+	if (ioctl(sc->fd, FBIOGET_VSCREENINFO, &sc->var) || ioctl(sc->fd, FBIOGET_FSCREENINFO, &fix))
+		return "fb0 gives no screen info";
+	if (sc->var.bits_per_pixel != 32)
+		return "fb0 is not 32 bits per pixel";
+	sc->stride = fix.line_length ? fix.line_length : sc->var.xres * 4;
+	sc->size = (size_t)sc->stride * sc->var.yres;
+	sc->pixels = calloc(1, sc->size);
+	return sc->pixels ? NULL : "no memory for the frame";
+}
+
+/* The first connected connector with a mode, and a CRTC its encoder can drive. */
+static int find_output(int fd, uint32_t *connector, uint32_t *crtc, struct drm_mode_modeinfo *mode)
+{
+	uint32_t crtcs[8], connectors[16];
+	struct drm_mode_card_res res = { 0 };
+	if (ioctl(fd, DRM_IOCTL_MODE_GETRESOURCES, &res) || !res.count_crtcs || !res.count_connectors)
 		return -1;
-	int ok = !ioctl(fd, FBIOGET_VSCREENINFO, &sc->var) && !ioctl(fd, FBIOGET_FSCREENINFO, &fix) &&
-		 sc->var.bits_per_pixel == 32;
-	sc->stride = fix.line_length;
-	sc->size = fix.smem_len;
-	sc->pixels = ok ? mmap(NULL, sc->size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0) : MAP_FAILED;
-	close(fd);
-	return sc->pixels == MAP_FAILED ? -1 : 0;
+	res.count_crtcs = res.count_crtcs > 8 ? 8 : res.count_crtcs;
+	res.count_connectors = res.count_connectors > 16 ? 16 : res.count_connectors;
+	res.count_fbs = res.count_encoders = 0;
+	res.crtc_id_ptr = (uintptr_t)crtcs;
+	res.connector_id_ptr = (uintptr_t)connectors;
+	if (ioctl(fd, DRM_IOCTL_MODE_GETRESOURCES, &res))
+		return -1;
+	for (uint32_t i = 0; i < res.count_connectors; i++) {
+		struct drm_mode_modeinfo modes[32];
+		struct drm_mode_get_connector conn = { .connector_id = connectors[i] };
+		if (ioctl(fd, DRM_IOCTL_MODE_GETCONNECTOR, &conn) || conn.connection != 1 || !conn.count_modes)
+			continue;
+		conn.count_modes = conn.count_modes > 32 ? 32 : conn.count_modes;
+		conn.count_props = conn.count_encoders = 0;
+		conn.modes_ptr = (uintptr_t)modes;
+		if (ioctl(fd, DRM_IOCTL_MODE_GETCONNECTOR, &conn))
+			continue;
+		struct drm_mode_get_encoder enc = { .encoder_id = conn.encoder_id };
+		int has_encoder = conn.encoder_id && !ioctl(fd, DRM_IOCTL_MODE_GETENCODER, &enc) && enc.crtc_id;
+		*connector = connectors[i];
+		*crtc = has_encoder ? enc.crtc_id : crtcs[0];
+		*mode = modes[0];
+		return 0;
+	}
+	return -1;
+}
+
+/* Returns why the DRM card cannot be drawn on, or NULL. */
+static const char *open_drm(struct screen *sc)
+{
+	uint32_t connector, crtc;
+	struct drm_mode_modeinfo mode;
+	sc->fd = open("/dev/dri/card0", O_RDWR | O_CLOEXEC);
+	if (sc->fd < 0)
+		return "no /dev/dri/card0";
+	if (find_output(sc->fd, &connector, &crtc, &mode))
+		return "no connected output";
+	struct drm_mode_create_dumb dumb = { .width = mode.hdisplay, .height = mode.vdisplay, .bpp = 32 };
+	if (ioctl(sc->fd, DRM_IOCTL_MODE_CREATE_DUMB, &dumb))
+		return "no dumb buffer";
+	struct drm_mode_fb_cmd fb = { .width = dumb.width, .height = dumb.height, .pitch = dumb.pitch,
+				      .bpp = 32, .depth = 24, .handle = dumb.handle };
+	struct drm_mode_map_dumb map = { .handle = dumb.handle };
+	if (ioctl(sc->fd, DRM_IOCTL_MODE_ADDFB, &fb) || ioctl(sc->fd, DRM_IOCTL_MODE_MAP_DUMB, &map))
+		return "the dumb buffer does not map";
+	void *pixels = mmap(NULL, dumb.size, PROT_READ | PROT_WRITE, MAP_SHARED, sc->fd, (off_t)map.offset);
+	if (pixels == MAP_FAILED)
+		return "the dumb buffer does not map";
+	sc->is_drm = 1;
+	sc->pixels = pixels;
+	sc->size = dumb.size;
+	sc->stride = dumb.pitch;
+	sc->var.xres = mode.hdisplay;
+	sc->var.yres = mode.vdisplay;
+	/* DRM's XRGB8888, as fbdev would describe it. */
+	sc->var.red = (struct fb_bitfield){ .offset = 16, .length = 8 };
+	sc->var.green = (struct fb_bitfield){ .offset = 8, .length = 8 };
+	sc->var.blue = (struct fb_bitfield){ .offset = 0, .length = 8 };
+	sc->connector = connector;
+	sc->crtc = (struct drm_mode_crtc){ .crtc_id = crtc, .fb_id = fb.fb_id, .count_connectors = 1,
+					   .mode = mode, .mode_valid = 1 };
+	return NULL;
+}
+
+/* Returns why the screen cannot be drawn on, or NULL. */
+static const char *open_screen(struct screen *sc)
+{
+	*sc = (struct screen){ .fd = -1 };
+	const char *why = open_fbdev(sc);
+	if (!why)
+		return NULL;
+	if (sc->fd >= 0)
+		close(sc->fd);
+	free(sc->pixels);
+	*sc = (struct screen){ .fd = -1 };
+	return open_drm(sc);
+}
+
+/* fbdev: write the frame out. DRM: put the drawn buffer on the output and mark it all changed, since
+ * simpledrm copies to the firmware's framebuffer only what a commit or a dirty call names; it stays until
+ * the card is closed. */
+static void show_frame(struct screen *sc)
+{
+	if (!sc->pixels)
+		return;
+	if (!sc->is_drm) {
+		if (pwrite(sc->fd, sc->pixels, sc->size, 0) != (ssize_t)sc->size)
+			say("update screen not shown: write to fb0: %s", strerror(errno));
+		return;
+	}
+	sc->crtc.set_connectors_ptr = (uintptr_t)&sc->connector;
+	struct drm_mode_fb_dirty_cmd dirty = { .fb_id = sc->crtc.fb_id };
+	if (ioctl(sc->fd, DRM_IOCTL_MODE_SETCRTC, &sc->crtc))
+		say("update screen not shown: the output does not take the buffer: %s", strerror(errno));
+	ioctl(sc->fd, DRM_IOCTL_MODE_DIRTYFB, &dirty);
+}
+
+static void close_screen(struct screen *sc)
+{
+	if (sc->is_drm && sc->pixels)
+		munmap(sc->pixels, sc->size);
+	if (!sc->is_drm)
+		free(sc->pixels);
+	if (sc->fd >= 0)
+		close(sc->fd);
+	*sc = (struct screen){ .fd = -1 };
 }
 
 /* The language's two letters from update-locale ("pt-BR" -> "pt"), English when there is none. */
@@ -657,13 +785,17 @@ static void load_text(const char *kind, const char *lang, struct image *img)
 	}
 }
 
-static void show_update_screen(const char *root, const struct options *o)
+/* Draws the update screen; it stays until close_screen(sc), once the update is in place. */
+static void show_update_screen(const char *root, const struct options *o, struct screen *screen)
 {
 	char lang[8];
 	read_update_language(root, o, lang, sizeof lang);
 	struct screen sc;
-	if (open_screen(&sc)) {
-		say("updating the system (no screen to draw on)");
+	const char *why = open_screen(&sc);
+	if (why) {
+		say("updating the system (no update screen: %s: %s)", why, strerror(errno));
+		close_screen(&sc);
+		*screen = sc;
 		return;
 	}
 	stop_text_console();
@@ -683,7 +815,9 @@ static void show_update_screen(const char *root, const struct options *o)
 	free(art.rgba);
 	free(title.rgba);
 	free(note.rgba);
-	munmap(sc.pixels, sc.size);
+	show_frame(&sc);
+	say("updating the system (%ux%u, %s)", sc.var.xres, sc.var.yres, sc.is_drm ? "drm" : "fb0");
+	*screen = sc;
 }
 
 static int apply_staged_update(const char *root, const struct options *o)
@@ -696,7 +830,8 @@ static int apply_staged_update(const char *root, const struct options *o)
 		if (!SYSTEM_FORMS[i].exists(staged))
 			continue;
 		time_t shown = time(NULL);
-		show_update_screen(root, o);
+		struct screen screen;
+		show_update_screen(root, o, &screen);
 		for (size_t j = 0; j < sizeof SYSTEM_FORMS / sizeof *SYSTEM_FORMS; j++) {
 			char old[PATH_MAX * 2];
 			system_path(root, o, "system.old", SYSTEM_FORMS[j].suffix, old, sizeof old);
@@ -708,11 +843,13 @@ static int apply_staged_update(const char *root, const struct options *o)
 		if (rename(staged, target)) {
 			say("cannot apply the update: %s", strerror(errno));
 			rename_system(root, o, "system.old", "system");
+			close_screen(&screen);
 			return 0;
 		}
 		say("update applied: %s", target + strlen(root) + 1);
 		while (time(NULL) - shown < UPDATE_MIN_SECONDS)
 			sleep(1);
+		close_screen(&screen);
 		return 1;
 	}
 	return 0;
