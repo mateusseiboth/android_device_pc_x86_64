@@ -86,7 +86,7 @@ line (`LocalSocket.setFileDescriptorsForSend`). Only on an installed system (not
 | `PATCHES` | | one `PATCH name= version= description= kernel=0/1 initrd=0/1` line each, then `OK` |
 | `REMOVE_PATCH` | `name=` | `OK reboot=1` (restores `kernel.old`/`initrd.old.img` when that patch replaced them) |
 
-Errors (`ERROR code=`): `not_installed`, `bad_package` (not a tar, missing or extra members, a size or
+Errors (`ERR` lines, as the rest of the protocol): `not_installed`, `bad_package` (not a tar, missing or extra members, a size or
 sha256 that does not match), `bad_signature`, `no_certificate` (no `.der` on the ESP), `wrong_flavor`,
 `wrong_base` (a patch for another build: its `build` is not the running system's
 `ro.system.build.date.utc`), `no_room`, `io`.
