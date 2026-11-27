@@ -39,7 +39,7 @@ FORMAT = 1
 CHUNK = 1 << 20
 SIGNING_KEY = 'pc-secureboot.key'
 MODULES = 'system/vendor/lib/modules'
-OVERLAY_SLACK = 4 << 20
+OVERLAY_SLACK = 8 << 20
 
 
 def describe(path):
@@ -123,7 +123,8 @@ def add_overlay(paths, work):
     stage.mkdir()
     stage_files(paths, stage)
     image = work / 'overlay.img'
-    size_kib = (tree_bytes(stage) + OVERLAY_SLACK) >> 10
+    # ext4 metadata (inode tables, block bitmaps) grows with the content: a tenth more, plus some room.
+    size_kib = (tree_bytes(stage) * 11 // 10 + OVERLAY_SLACK) >> 10
     subprocess.run(['mke2fs', '-q', '-t', 'ext4', '-O', '^has_journal', '-L', 'pc-patch', '-d', str(stage),
                     str(image), f'{size_kib}K'], check=True)
     shutil.rmtree(stage)
