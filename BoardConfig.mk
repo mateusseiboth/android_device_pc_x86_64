@@ -35,7 +35,8 @@ BOARD_FLASH_BLOCK_SIZE := 512
 # shaders with the host's mesa_clc/vtn_bindgen2 (prebuilts/mesa-build-deps, see README).
 BOARD_BUILD_AOSPEXT_MESA3D := true
 BOARD_MESA3D_SRC_DIR := external/mesa3d
-BOARD_MESA3D_GALLIUM_DRIVERS := radeonsi r600 iris crocus nouveau virgl softpipe
+# svga: VMware's and VirtualBox's SVGA (vmwgfx), with the VM's 3D acceleration on.
+BOARD_MESA3D_GALLIUM_DRIVERS := radeonsi r600 iris crocus nouveau virgl svga softpipe
 BOARD_MESA3D_VULKAN_DRIVERS := amd intel intel_hasvk virtio
 BOARD_MESA3D_BUILD_LIBGBM := true
 BOARD_MESA3D_AMD_USE_LLVM := false

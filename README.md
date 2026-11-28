@@ -9,7 +9,7 @@ an existing partition and booted through GRUB, in the spirit of Android-x86 and 
 |---|---|
 | Product, board, lunch | builds (`system.img`, live ISO) |
 | Kernel | upstream 7.2 with Fedora's config + Android requirements, built with AOSP clang |
-| Graphics | Mesa (radeonsi, iris, crocus, r600, nouveau, virgl, softpipe; RADV, ANV, venus), minigbm on Mesa's GBM, drm_hwcomposer — virgl checked in QEMU/KVM (`virtio-vga-gl`), real GPUs not yet |
+| Graphics | Mesa (radeonsi, iris, crocus, r600, nouveau, virgl, svga, softpipe; RADV, ANV, venus), minigbm on Mesa's GBM, drm_hwcomposer — virgl checked in QEMU/KVM (`virtio-vga-gl`); VMware and VirtualBox need their SVGA with 3D acceleration on (VirtualBox: VMSVGA) |
 | Boot | `pc-init` initrd (folder install, live ISO) — the live ISO boots to the desktop in QEMU/KVM; UEFI Secure Boot through shim + MOK checked in QEMU (shim, GRUB, signed kernel) |
 | HALs | AOSP software HALs, AIDL audio over ALSA, Wi-Fi (nl80211), Bluetooth, USB cameras — they start in QEMU; on real hardware not yet |
 | Installer | `PcInstaller` app + `pc-installd` root service ([packages/apps/PcInstaller](https://github.com/mateusseiboth/android_packages_apps_PcInstaller)), UEFI and BIOS, install, update (also from a USB drive on an installed system) and removal; GRUB's BIOS boot sector checked in QEMU, Android not yet booted |
