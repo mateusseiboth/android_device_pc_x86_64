@@ -35,7 +35,9 @@ device/pc/pc_x86_64/patches/apply.sh
 (`patches/<project path>/*.patch`, with `git am`, so the original author stays); run it again after every
 `repo sync`, it skips what a project already has. Today: Mesa's BLORP fix for Sandy Bridge and older
 Intel graphics from Mesa 26.1.2 (garbled text and images on Mesa 26.1,
-[mesa#15435](https://gitlab.freedesktop.org/mesa/mesa/-/issues/15435)).
+[mesa#15435](https://gitlab.freedesktop.org/mesa/mesa/-/issues/15435)), and a Bluetooth stack fix that
+lets old controllers without Low Energy (Bluetooth 2.1/3.0, such as the Atheros AR3011) turn on with
+Classic only, instead of crashing the Bluetooth process in a loop.
 
 Forks: [minigbm](https://github.com/mateusseiboth/android_external_minigbm) keeps GloDroid's sources
 (from android-generic) with Android 17's build files plus AIDL/stable-C `gbm_mesa` variants;

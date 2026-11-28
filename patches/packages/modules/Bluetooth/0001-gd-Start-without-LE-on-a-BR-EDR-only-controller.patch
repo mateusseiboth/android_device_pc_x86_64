@@ -1,0 +1,305 @@
+From 59a545b725e9b7b80ac5601f90d95ddfd8669035 Mon Sep 17 00:00:00 2001
+From: Mateus Seiboth <mateusseiboth@gmail.com>
+Date: Sat, 28 Nov 2026 12:37:24 -0400
+Subject: [PATCH] gd: Start without LE on a BR/EDR-only controller
+
+Old controllers that predate Bluetooth 4.0, such as the Atheros AR3011
+(ath3k) found in laptops like the Dell Inspiron N5110, have no Low
+Energy at all. They answer every LE command with a Command Status
+"Unknown HCI Command". The controller module sent Write LE Host Support
+and the LE reads unconditionally at start, so the HCI layer aborted on
+the first one ("WRITE_LE_HOST_SUPPORT was not expecting status event")
+and the Bluetooth process crashed in a loop until the framework gave up.
+
+Make the stack come up with Classic only on such a controller:
+
+- Controller: read the LMP features first and only send Write LE Host
+  Support, the LE reads, LE Set Event Mask and LE Get Vendor
+  Capabilities when page 0 has "LE Supported (Controller)". The LE
+  values keep their empty defaults (no LE buffers, features or states),
+  so all ACL buffers stay with BR/EDR. On LE controllers the commands
+  are the same, the LE reads only move after the features read, and
+  Start() waits for them because it reads the LE features afterwards.
+- Controller: LeRand() has no LE_Rand to use, but bta_dm_enable() uses it
+  to wait for the queued commands before enabling the profiles. Keep the
+  barrier with Read Local Version Information and return a host random
+  number.
+- Controller: dumpsys no longer indexes past the feature pages the
+  controller reported (a 2.1 controller has fewer than three).
+- HCI layer: a failed Command Status for a command that expects a
+  Command Complete is handed to the complete handler as a complete with
+  only the status, as was already done for unknown vendor commands,
+  instead of aborting. Handlers that check the status log the error, so
+  an LE request from an app (scan start, for example) fails instead of
+  taking the stack down.
+- LE advertising manager: do not read the advertising TX power at start,
+  and refuse new advertisers (too many advertisers) without LE. No LE
+  address policy is ever set then, and creating an advertiser would hit
+  a fatal on the unset policy.
+
+The legacy stack already checks SupportsBle() for LE scanning, privacy,
+LE buffers and LE connections, so it needs no change. The advertising
+manager test controller now reports LE support, as its tests expect.
+
+Change-Id: I448e7c308b9a391f36ab796e5852fd6eb005db75
+---
+ system/gd/hci/controller_impl.cc              | 81 ++++++++++++++-----
+ system/gd/hci/hci_layer.cc                    | 14 ++--
+ system/gd/hci/le_advertising_manager_impl.cc  | 15 +++-
+ .../hci/le_advertising_manager_impl_test.cc   |  2 +
+ 4 files changed, 81 insertions(+), 31 deletions(-)
+
+diff --git a/system/gd/hci/controller_impl.cc b/system/gd/hci/controller_impl.cc
+index e20029f..d5e9ed8 100644
+--- a/system/gd/hci/controller_impl.cc
++++ b/system/gd/hci/controller_impl.cc
+@@ -29,6 +29,7 @@
+ #include "hci/controller.h"
+ #include "hci/event_checkers.h"
+ #include "hci/hci_interface.h"
++#include "os/rand.h"
+ #include "os/system_properties.h"
+ #include "stack/include/hcidefs.h"
+ 
+@@ -65,7 +66,6 @@ struct ControllerImpl::impl {
+       set_event_mask_page_2(kDefaultEventMaskPage2);
+     }
+ 
+-    write_le_host_support(Enable::ENABLED, Enable::DISABLED);
+     hci_->EnqueueCommand(
+             ReadLocalVersionInformationBuilder::Create(),
+             handler_->BindOnceOn(
+@@ -75,15 +75,6 @@ struct ControllerImpl::impl {
+             handler_->BindOnceOn(
+                     this, &ControllerImpl::impl::read_local_supported_commands_complete_handler));
+ 
+-    hci_->EnqueueCommand(
+-            LeReadLocalSupportedFeaturesBuilder::Create(),
+-            handler_->BindOnceOn(this,
+-                                 &ControllerImpl::impl::le_read_local_supported_features_handler));
+-
+-    hci_->EnqueueCommand(
+-            LeReadSupportedStatesBuilder::Create(),
+-            handler_->BindOnceOn(this, &ControllerImpl::impl::le_read_supported_states_handler));
+-
+     // Wait for all extended features read
+     std::promise<void> features_promise;
+     auto features_future = features_promise.get_future();
+@@ -95,6 +86,32 @@ struct ControllerImpl::impl {
+                     std::move(features_promise)));
+     features_future.wait();
+ 
++    // A BR/EDR-only controller (Bluetooth 2.1/3.0, e.g. Atheros AR3011) answers every LE command
++    // with a Command Status "Unknown HCI Command", which aborts the stack. Only enable and query LE
++    // when LMP features page 0 says "LE Supported (Controller)"; otherwise the LE values keep their
++    // empty defaults (no LE buffers, no LE features, no LE states) and the stack runs Classic only.
++    const bool le_supported = module_.SupportsBle();
++    if (le_supported) {
++      write_le_host_support(Enable::ENABLED, Enable::DISABLED);
++
++      hci_->EnqueueCommand(
++              LeReadLocalSupportedFeaturesBuilder::Create(),
++              handler_->BindOnceOn(
++                      this, &ControllerImpl::impl::le_read_local_supported_features_handler));
++
++      // The rest of Start() reads the LE features, so wait for them. Commands complete in order:
++      // once the supported states are back, the features are too.
++      std::promise<void> le_promise;
++      auto le_future = le_promise.get_future();
++      hci_->EnqueueCommand(
++              LeReadSupportedStatesBuilder::Create(),
++              handler_->BindOnceOn(this, &ControllerImpl::impl::le_read_supported_states_handler,
++                                   std::move(le_promise)));
++      le_future.wait();
++    } else {
++      log::warn("Controller does not support LE, starting with BR/EDR only");
++    }
++
+     auto le_event_mask = kDefaultLeEventMask;
+     if (module_.SupportsBleChannelSounding()) {
+       le_event_mask |= kLeCSEventMask;
+@@ -115,11 +132,12 @@ struct ControllerImpl::impl {
+                                    &ControllerImpl::impl::set_min_encryption_key_size_handler));
+     }
+ 
+-    if (is_supported(OpCode::LE_READ_BUFFER_SIZE_V2)) {
++    // Without LE, le_buffer_size_ stays zero and all ACL buffers stay with BR/EDR.
++    if (le_supported && is_supported(OpCode::LE_READ_BUFFER_SIZE_V2)) {
+       hci_->EnqueueCommand(
+               LeReadBufferSizeV2Builder::Create(),
+               handler_->BindOnceOn(this, &ControllerImpl::impl::le_read_buffer_size_v2_handler));
+-    } else {
++    } else if (le_supported) {
+       hci_->EnqueueCommand(
+               LeReadBufferSizeV1Builder::Create(),
+               handler_->BindOnceOn(this, &ControllerImpl::impl::le_read_buffer_size_handler));
+@@ -132,9 +150,11 @@ struct ControllerImpl::impl {
+                                    &ControllerImpl::impl::read_local_supported_codecs_v1_handler));
+     }
+ 
+-    hci_->EnqueueCommand(
+-            LeReadFilterAcceptListSizeBuilder::Create(),
+-            handler_->BindOnceOn(this, &ControllerImpl::impl::le_read_accept_list_size_handler));
++    if (le_supported) {
++      hci_->EnqueueCommand(
++              LeReadFilterAcceptListSizeBuilder::Create(),
++              handler_->BindOnceOn(this, &ControllerImpl::impl::le_read_accept_list_size_handler));
++    }
+ 
+     if (is_supported(OpCode::LE_READ_RESOLVING_LIST_SIZE) && module_.SupportsBlePrivacy()) {
+       hci_->EnqueueCommand(
+@@ -243,9 +263,10 @@ struct ControllerImpl::impl {
+                       this, &ControllerImpl::impl::read_default_erroneous_data_reporting_handler));
+     }
+ 
+-    // Skip vendor capabilities check if configured.
+-    if (os::GetSystemPropertyBool(kPropertyVendorCapabilitiesEnabled,
+-                                  kDefaultVendorCapabilitiesEnabled)) {
++    // Skip vendor capabilities check if configured. LE_Get_Vendor_Capabilities is an LE vendor
++    // command, so a controller without LE is not asked either.
++    if (le_supported && os::GetSystemPropertyBool(kPropertyVendorCapabilitiesEnabled,
++                                                  kDefaultVendorCapabilitiesEnabled)) {
+       // More commands can be enqueued from le_get_vendor_capabilities_handler
+       std::promise<void> vendor_promise;
+       auto vendor_future = vendor_promise.get_future();
+@@ -526,12 +547,13 @@ struct ControllerImpl::impl {
+     le_local_supported_features_ = complete_view.GetLeFeatures();
+   }
+ 
+-  void le_read_supported_states_handler(CommandCompleteView view) {
++  void le_read_supported_states_handler(std::promise<void> promise, CommandCompleteView view) {
+     auto complete_view = LeReadSupportedStatesCompleteView::Create(view);
+     log::assert_that(complete_view.IsValid(), "Complete view is invalid");
+     ErrorCode status = complete_view.GetStatus();
+     log::assert_that(status == ErrorCode::SUCCESS, "Status {}", ErrorCodeText(status));
+     le_supported_states_ = complete_view.GetLeStates();
++    promise.set_value();
+   }
+ 
+   void le_read_accept_list_size_handler(CommandCompleteView view) {
+@@ -828,6 +850,15 @@ struct ControllerImpl::impl {
+   }
+ 
+   void le_rand(LeRandCallback cb) {
++    if (!module_.SupportsBle()) {
++      // No LE_Rand on a BR/EDR-only controller. bta_dm_enable() uses this call to wait for the
++      // commands queued before it, so keep that: send a mandatory BR/EDR command as the barrier
++      // and answer with a host random number.
++      hci_->EnqueueCommand(
++              ReadLocalVersionInformationBuilder::Create(),
++              handler_->BindOnceOn(this, &ControllerImpl::impl::host_rand_cb, std::move(cb)));
++      return;
++    }
+     std::unique_ptr<LeRandBuilder> packet = LeRandBuilder::Create();
+     hci_->EnqueueCommand(
+             std::move(packet),
+@@ -842,6 +873,10 @@ struct ControllerImpl::impl {
+     std::move(cb)(status_view.GetRandomNumber());
+   }
+ 
++  void host_rand_cb(LeRandCallback cb, CommandCompleteView /* view */) {
++    std::move(cb)(os::GenerateRandomUint64());
++  }
++
+   void set_event_filter(std::unique_ptr<SetEventFilterBuilder> packet) {
+     hci_->EnqueueCommand(std::move(packet),
+                          handler_->BindOnce(check_complete<SetEventFilterCompleteView>));
+@@ -871,6 +906,10 @@ struct ControllerImpl::impl {
+   }
+ 
+   void le_set_event_mask(uint64_t le_event_mask) {
++    if (!module_.SupportsBle()) {
++      log::info("Controller does not support LE, not setting the LE event mask");
++      return;
++    }
+     std::unique_ptr<LeSetEventMaskBuilder> packet = LeSetEventMaskBuilder::Create(le_event_mask);
+     hci_->EnqueueCommand(std::move(packet),
+                          handler_->BindOnce(check_complete<LeSetEventMaskCompleteView>));
+@@ -1654,8 +1693,8 @@ void ControllerImpl::impl::dump(OutputT&& out) const {
+                  "        page2: 0x{:016x}\n"
+                  "    le_local_supported_features:\n"
+                  "        page0: 0x{:016x}\n",
+-                 extended_lmp_features_array_[0], extended_lmp_features_array_[1],
+-                 extended_lmp_features_array_[2], le_local_supported_features_);
++                 module_.GetLocalFeatures(0), module_.GetLocalFeatures(1),
++                 module_.GetLocalFeatures(2), le_local_supported_features_);
+ 
+   std::format_to(out, "    local_supported_commands: [");
+   for (size_t i = 0; i < local_supported_commands_.size(); i++) {
+diff --git a/system/gd/hci/hci_layer.cc b/system/gd/hci/hci_layer.cc
+index fd85769..49ddac7 100644
+--- a/system/gd/hci/hci_layer.cc
++++ b/system/gd/hci/hci_layer.cc
+@@ -256,16 +256,16 @@ struct HciLayer::impl {
+     log::assert_that(waiting_command_ == op_code, "Waiting for {}, got {}",
+                      OpCodeText(waiting_command_), OpCodeText(op_code));
+ 
+-    bool is_vendor_specific = (static_cast<int>(op_code) & (0x3f << 10)) == (0x3f << 10);
+     using WaitingFor = CommandQueueEntry::WaitingFor;
+     WaitingFor waiting_for = command_queue_.front().waiting_for_;
+     CommandStatusView status_view = CommandStatusView::Create(event);
+-    if (is_vendor_specific && (is_status && waiting_for == WaitingFor::COMPLETE) &&
+-        (status_view.IsValid() && status_view.GetStatus() == ErrorCode::UNKNOWN_HCI_COMMAND)) {
+-      // If this is a command status of a vendor specific command, and command complete is expected,
+-      // we can't treat this as hard failure since we have no way of probing this lack of support at
+-      // earlier time. Instead we let the command complete handler handle a empty Command Complete
+-      // packet, which will be interpreted as invalid response.
++    if ((is_status && waiting_for == WaitingFor::COMPLETE) &&
++        (status_view.IsValid() && status_view.GetStatus() != ErrorCode::SUCCESS)) {
++      // If this is a failed command status, and command complete is expected, we can't treat this
++      // as hard failure: vendor specific commands can't be probed at an earlier time, and old
++      // controllers (e.g. BR/EDR-only ones without LE) answer every command they don't know this
++      // way. Instead we let the command complete handler handle a Command Complete packet that only
++      // carries the status, which handlers read as a failed or invalid response.
+ 
+       auto payload = std::make_unique<packet::RawBuilder>();
+       payload->AddOctets1(static_cast<uint8_t>(status_view.GetStatus()));
+diff --git a/system/gd/hci/le_advertising_manager_impl.cc b/system/gd/hci/le_advertising_manager_impl.cc
+index 771c0f9..7c93b0c 100644
+--- a/system/gd/hci/le_advertising_manager_impl.cc
++++ b/system/gd/hci/le_advertising_manager_impl.cc
+@@ -170,9 +170,12 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
+       }
+     } else {
+       advertising_api_type_ = AdvertisingApiType::LEGACY;
+-      hci_->EnqueueCommand(
+-              LeReadAdvertisingPhysicalChannelTxPowerBuilder::Create(),
+-              handler->BindOnceOn(this, &impl::on_read_advertising_physical_channel_tx_power));
++      // A BR/EDR-only controller has no LE commands at all.
++      if (controller_->SupportsBle()) {
++        hci_->EnqueueCommand(
++                LeReadAdvertisingPhysicalChannelTxPowerBuilder::Create(),
++                handler->BindOnceOn(this, &impl::on_read_advertising_physical_channel_tx_power));
++      }
+     }
+     enabled_sets_ = std::vector<EnabledSet>(num_instances_);
+     for (size_t i = 0; i < enabled_sets_.size(); i++) {
+@@ -399,6 +402,12 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
+   }
+ 
+   AdvertiserId allocate_advertiser() {
++    // Without LE no LE address policy is ever set, and creating an advertiser would abort on it.
++    // Fail the request like a full controller does instead.
++    if (!controller_->SupportsBle()) {
++      log::warn("Controller does not support LE, no advertiser available");
++      return kInvalidId;
++    }
+     AdvertiserId id;
+     if (com_android_bluetooth_flags_multi_adv_index()) {
+       id = 0;
+diff --git a/system/gd/hci/le_advertising_manager_impl_test.cc b/system/gd/hci/le_advertising_manager_impl_test.cc
+index a28953d..48f1bea 100644
+--- a/system/gd/hci/le_advertising_manager_impl_test.cc
++++ b/system/gd/hci/le_advertising_manager_impl_test.cc
+@@ -62,6 +62,8 @@ public:
+ 
+   uint16_t GetLeMaximumAdvertisingDataLength() const override { return 0x0672; }
+ 
++  bool SupportsBle() const override { return true; }
++
+   bool SupportsBlePeriodicAdvertising() const override { return true; }
+ 
+   bool SupportsBleExtendedAdvertising() const override { return support_ble_extended_advertising_; }
+-- 
+2.56.0
+
