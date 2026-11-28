@@ -205,7 +205,8 @@ PRODUCT_PACKAGES += \
 # Files (the file manager; DocumentsUI stays the system file picker), the clipboard history behind
 # the status bar's clipboard button, Printers & scanners (driverless printing and eSCL scanning; its
 # print service replaces AOSP's built-in one) and Disks (partitions, mounting, formatting, health,
-# with its root service pc-disksd).
+# with its root service pc-disksd), and Remote desktop (an RDP server, off until switched on in Settings >
+# System).
 PRODUCT_PACKAGES += \
     PcClipboard \
     PcTaskManager \
@@ -214,7 +215,8 @@ PRODUCT_PACKAGES += \
     PcViewer \
     PcFiles \
     PcPrint \
-    PcDisks
+    PcDisks \
+    PcRemote
 
 # ARM (arm64) apps through Google's libndk_translation native bridge. Proprietary, so it lives in the
 # local vendor/pc-ndk-local (never pushed): builds without it simply have no ARM translation.
