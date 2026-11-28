@@ -371,6 +371,11 @@ Desktop after setup.
 
 Login screen of an installed system, from the second boot on.
 
+## License
+
+Apache License 2.0, see [LICENSE](LICENSE). Copyright 2026 Mateus Seiboth. Third-party code keeps its own
+license (see Credits).
+
 ## Credits
 
 - [LineageOS](https://lineageos.org) ([GitHub](https://github.com/LineageOS)): the base system and build this is part of.
