@@ -1,0 +1,3 @@
+# Power settings, set by Settings and read by the Power HAL (device/pc/pc_x86_64/power).
+persist.sys.pc.power.profile u:object_r:pc_power_settings_prop:s0 exact enum balanced saving performance
+persist.sys.pc.power.charge_limit u:object_r:pc_power_settings_prop:s0 exact int

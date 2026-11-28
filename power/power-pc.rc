@@ -1,0 +1,6 @@
+# Root for the sysfs files it tunes, which belong to root; no capabilities, it needs none.
+service vendor.power-pc /vendor/bin/hw/android.hardware.power-service.pc
+    class hal
+    user root
+    group system
+    capabilities

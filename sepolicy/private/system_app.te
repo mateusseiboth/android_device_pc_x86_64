@@ -1,0 +1,2 @@
+# Settings > System > Power: the power profile and the charge limit for the Power HAL.
+set_prop(system_app, pc_power_settings_prop)

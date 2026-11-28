@@ -15,3 +15,6 @@
 
 # Linux terminal: KVM detection (init.pc.rc).
 /(vendor|system/vendor)/bin/pc-hypervisor\.sh u:object_r:pc_hypervisor_exec:s0
+
+# Power HAL (power/).
+/(vendor|system/vendor)/bin/hw/android\.hardware\.power-service\.pc u:object_r:hal_power_pc_exec:s0

@@ -1,0 +1,2 @@
+# Settings' power choices (persist.sys.pc.power.*): set by Settings, read by the Power HAL (vendor).
+system_restricted_prop(pc_power_settings_prop)

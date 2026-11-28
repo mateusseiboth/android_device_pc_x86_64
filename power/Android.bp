@@ -1,0 +1,27 @@
+// Our Power HAL (IPower V7): power profiles, device power saving on battery and the charge limit.
+cc_binary {
+    name: "android.hardware.power-service.pc",
+    relative_install_path: "hw",
+    vendor: true,
+    srcs: [
+        "ChargeLimit.cpp",
+        "Controller.cpp",
+        "DeviceTuning.cpp",
+        "Power.cpp",
+        "PowerSupply.cpp",
+        "Profiles.cpp",
+        "Sysfs.cpp",
+        "Watchers.cpp",
+        "main.cpp",
+    ],
+    init_rc: ["power-pc.rc"],
+    vintf_fragments: ["power-pc.xml"],
+    shared_libs: [
+        "libbase",
+        "libbinder_ndk",
+        "android.hardware.power-V7-ndk",
+        // Headers of the types IPower V7 imports (the session channel's message queue).
+        "android.hardware.common-V2-ndk",
+        "android.hardware.common.fmq-V1-ndk",
+    ],
+}

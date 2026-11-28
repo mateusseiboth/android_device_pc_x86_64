@@ -16,6 +16,7 @@ an existing partition and booted through GRUB, in the spirit of Android-x86 and 
 | Desktop UI | [vendor/pc/ui](https://github.com/mateusseiboth/android_vendor_pc_ui) + `pc` branches of frameworks/base and Launcher3 — runs in QEMU/KVM (screenshots below) |
 | Linux terminal | AVF (`com.android.virt`, crosvm, Terminal app) on KVM, non-protected VMs — built, not yet run (needs a PC, not a VM) |
 | Boot log | `pc-bootlog`: the live log as a terminal instead of the boot animation — runs in QEMU/KVM |
+| Power | our Power HAL (`power/`): profiles, device power saving on battery, charge limit; written, not yet run |
 
 ## Sources
 
@@ -281,6 +282,54 @@ adb logcat
 
 The first connection shows the usual prompt on the PC's screen to allow the computer's key.
 
+## Power
+
+`android.hardware.power-service.pc` (`power/`) is the device's IPower (AIDL V7), in place of AOSP's
+example, which did nothing. It runs as root without capabilities in its own domain, `hal_power_pc`.
+Every knob is optional: what a PC does not have is skipped.
+
+**Profiles**, chosen in Settings (`persist.sys.pc.power.profile`, balanced when unset) and applied to
+every CPU policy's `energy_performance_preference` (intel_pstate, amd-pstate) and to
+`/sys/firmware/acpi/platform_profile`:
+
+| Profile | EPP | Platform profile |
+|---|---|---|
+| `balanced` | `balance_performance` (or `default`) | `balanced` |
+| `saving` | `power` (or `balance_power`) | `low-power` (or `quiet`, `cool`) |
+| `performance` | `performance` | `performance` (or `balanced-performance`) |
+
+Android's battery saver (`Mode::LOW_POWER`) switches to `saving` and back to the chosen profile. It is
+the only mode the HAL reports as supported, and only when `saving` changes something; boosts and hint
+sessions are unsupported.
+
+**On battery** (no Mains supply online; a PC without a battery is always on AC), checked at start and on
+every `power_supply` uevent:
+
+| Knob | On battery |
+|---|---|
+| `/sys/module/pcie_aspm/parameters/policy` | `powersupersave` (or `powersave`) |
+| `/sys/bus/usb/devices/*/power/control` | `auto`, except HID (keyboards, mice, touchpads), audio and Bluetooth adapters |
+| `/sys/class/scsi_host/host*/link_power_management_policy` | `med_power_with_dipm` |
+| `/sys/module/snd_hda_intel/parameters/power_save`, `power_save_controller` | `1`, `Y` |
+| `/sys/bus/pci/devices/*/power/control` | `auto` |
+
+On AC each knob gets back the value it had before (the kernel's), so a PC that never runs on battery
+is never touched. If the HAL restarts while on battery, AC gets `default`, `on`, `max_performance`,
+`0` and `N` instead (`vendor.pc.power.battery_tuned` tells it). Devices plugged in on battery get the
+battery values too. Wi-Fi power save is left to the framework and wpa_supplicant: nl80211 needs
+`CAP_NET_ADMIN`, which a HAL other than Wi-Fi may not have.
+
+**Charge limit** (`persist.sys.pc.power.charge_limit`: a percentage, `0` charges to 100% again, unset
+leaves the firmware as it is): `charge_control_end_threshold` on each battery, with
+`charge_control_start_threshold` 5 below where it exists (ThinkPad, Dell, Huawei...) and Dell's
+`charge_types` switched to `Custom`; machines with only a fixed cap use `charge_types` `Long_Life` or
+IdeaPad's `conservation_mode` (about 60%).
+
+Properties the HAL sets for Settings: `vendor.pc.power.profiles` (the profiles this PC can apply, comma
+separated, empty without EPP or platform profile), `vendor.pc.power.charge_limit` (`1` when a limit can
+be set) and `vendor.pc.power.charge_limit_fixed` (the fixed cap, when that is all there is). SELinux:
+`pc_power_settings_prop` (system_ext public, set by `system_app`) and `vendor_pc_power_prop` (vendor).
+
 ## Tree
 
 | Path | What |
@@ -294,8 +343,9 @@ The first connection shows the usual prompt on the PC's screen to allow the comp
 | `rootdir/` | `init.pc.rc`, `ueventd.rc` |
 | `terminal/` | Linux terminal: KVM detection (`pc-hypervisor.sh`) and default permissions |
 | `bootlog/` | `pc-bootlog`, the boot animation that shows the live log |
+| `power/` | `android.hardware.power-service.pc`, the Power HAL (profiles, battery tuning, charge limit) |
 | `audio/`, `wifi/`, `camera/` | HAL configuration |
-| `sepolicy/` | vendor policy, and system_ext private policy in `sepolicy/private` (SELinux is permissive while it is completed) |
+| `sepolicy/` | vendor policy, and system_ext policy in `sepolicy/public` and `sepolicy/private` (SELinux is permissive while it is completed) |
 
 Tests: `python3 -m unittest` in `kernel/`, `initrd/`, `iso/`, `secureboot/`, `vulkan/`, `terminal/` and `bootlog/`; `secureboot/sb_boot_test.py` boots an ISO in QEMU.
 

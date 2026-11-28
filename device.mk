@@ -105,7 +105,6 @@ PRODUCT_PACKAGES += \
     com.android.hardware.authsecret \
     android.hardware.health-service.example \
     android.hardware.health.storage-service.default \
-    com.android.hardware.power \
     com.android.hardware.thermal \
     android.hardware.drm-service-lazy.clearkey \
     vulkan.pc
@@ -132,6 +131,11 @@ PRODUCT_VENDOR_PROPERTIES += sys.use_memfd=true
 
 # Brightness: the display's backlight (lights/).
 PRODUCT_PACKAGES += android.hardware.lights-service.pc
+
+# Power (power/): profiles, device power saving on battery and the charge limit, our IPower. It
+# replaces AOSP's example APEX (com.android.hardware.power), whose IPower did nothing and whose
+# IPowerStats only reported made-up rails (a modem, a GPU); a PC has no power rails to read.
+PRODUCT_PACKAGES += android.hardware.power-service.pc
 
 # Audio: AOSP's AIDL audio HAL over ALSA (HDA and USB), effects and policy.
 PRODUCT_PACKAGES += \

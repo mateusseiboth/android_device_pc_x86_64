@@ -1,0 +1,26 @@
+# Our Power HAL (power/): power profiles, device power saving on battery and the charge limit.
+type hal_power_pc, domain;
+hal_server_domain(hal_power_pc, hal_power)
+
+type hal_power_pc_exec, exec_type, vendor_file_type, file_type;
+init_daemon_domain(hal_power_pc)
+
+# AC plugged and unplugged, devices and drivers coming up: the kernel's uevents.
+allow hal_power_pc self:netlink_kobject_uevent_socket create_socket_perms_no_ioctl;
+
+# energy_performance_preference of every CPU policy.
+r_dir_file(hal_power_pc, sysfs_devices_system_cpu)
+allow hal_power_pc sysfs_devices_system_cpu:file w_file_perms;
+
+# The other knobs sit at paths that change with the hardware (each PCI and USB device's
+# power/control, each SATA host, each battery's charge thresholds, IdeaPad's platform device), which
+# genfscon cannot name one by one, plus fixed ones in plain sysfs (platform_profile, pcie_aspm and
+# snd_hda_intel parameters). Batteries are sysfs_batteryinfo where a device labels them so.
+r_dir_file(hal_power_pc, sysfs)
+allow hal_power_pc sysfs:file w_file_perms;
+r_dir_file(hal_power_pc, sysfs_batteryinfo)
+allow hal_power_pc sysfs_batteryinfo:file w_file_perms;
+
+# Settings' choices in, what this PC can do out.
+get_prop(hal_power_pc, pc_power_settings_prop)
+set_prop(hal_power_pc, vendor_pc_power_prop)

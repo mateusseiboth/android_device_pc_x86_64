@@ -52,7 +52,9 @@ BOARD_VENDOR_SEPOLICY_DIRS += device/pc/pc_x86_64/sepolicy/vendor
 SYSTEM_EXT_PRIVATE_SEPOLICY_DIRS += packages/apps/PcInstaller/installd/sepolicy/private
 SYSTEM_EXT_PRIVATE_SEPOLICY_DIRS += packages/apps/PcTerminal/containerd/sepolicy/private
 SYSTEM_EXT_PRIVATE_SEPOLICY_DIRS += packages/apps/PcDisks/daemon/sepolicy/private
-# Platform-side policy of our own system_ext pieces (the boot log runs as bootanim).
+# Platform-side policy of our own system_ext pieces (the boot log runs as bootanim; Settings sets the
+# power properties). Public: types vendor policy also names (the Power HAL reads those properties).
+SYSTEM_EXT_PUBLIC_SEPOLICY_DIRS += device/pc/pc_x86_64/sepolicy/public
 SYSTEM_EXT_PRIVATE_SEPOLICY_DIRS += device/pc/pc_x86_64/sepolicy/private
 
 # Kernel modules from kernel/build_kernel.sh (KERNEL_OUT, default out/kernel-pc), installed in

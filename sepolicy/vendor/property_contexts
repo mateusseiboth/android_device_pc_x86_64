@@ -1,2 +1,9 @@
 # Set by pc-hypervisor.sh when KVM works; init.pc.rc turns it into ro.boot.hypervisor.vm.supported.
 vendor.pc.kvm u:object_r:vendor_pc_kvm_prop:s0 exact bool
+
+# Set by the Power HAL (power/): the profiles this PC can apply, whether a charge limit can be set and
+# the fixed cap when that is all the firmware has. battery_tuned is the HAL's own note across restarts.
+vendor.pc.power.profiles u:object_r:vendor_pc_power_prop:s0 exact string
+vendor.pc.power.charge_limit u:object_r:vendor_pc_power_prop:s0 exact bool
+vendor.pc.power.charge_limit_fixed u:object_r:vendor_pc_power_prop:s0 exact int
+vendor.pc.power.battery_tuned u:object_r:vendor_pc_power_prop:s0 exact bool

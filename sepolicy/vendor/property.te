@@ -1,2 +1,6 @@
 # KVM works on this PC (pc-hypervisor.sh); only init reads it.
 vendor_internal_prop(vendor_pc_kvm_prop)
+
+# What the Power HAL (power/) found this PC can do; Settings reads it to show its options.
+vendor_restricted_prop(vendor_pc_power_prop)
+get_prop(system_app, vendor_pc_power_prop)
