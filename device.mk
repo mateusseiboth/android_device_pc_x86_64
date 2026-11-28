@@ -41,6 +41,14 @@ PRODUCT_VENDOR_PROPERTIES += \
     ro.hardware.egl=mesa \
     ro.opengles.version=196610
 
+# Media codecs through the AIDL Codec2 HAL, the only one the media.swcodec APEX registers. The framework
+# picks HIDL unless told otherwise, finds no store, and is left with the in-process AAC decoder: no video
+# decoder at all (YouTube: "There was a problem while playing").
+PRODUCT_VENDOR_PROPERTIES += media.c2.hal.selection=aidl
+# Syscalls Mesa makes when minigbm loads it into media.swcodec to allocate a decoder's surface buffers.
+PRODUCT_COPY_FILES += \
+    device/pc/pc_x86_64/seccomp_policy/mediaswcodec.policy:$(TARGET_COPY_OUT_VENDOR)/etc/seccomp_policy/mediaswcodec.policy
+
 # drm_hwcomposer: only the primary and cursor planes. With overlay planes the taskbar of a second
 # monitor (AMD Renoir) vanished whenever the screen stood still; the GPU composes the rest.
 PRODUCT_VENDOR_PROPERTIES += ro.vendor.hwc.use_overlay_planes=0
@@ -74,9 +82,11 @@ PC_FIRMWARE_FILES := $(shell cd $(PC_FIRMWARE_DIR) 2>/dev/null && find . \( -typ
 PRODUCT_COPY_FILES += \
     $(foreach f,$(PC_FIRMWARE_FILES),$(PC_FIRMWARE_DIR)/$(f):$(TARGET_COPY_OUT_VENDOR)/firmware/$(f))
 
-# A PC: device type, Ethernet, USB host, freeform windows.
+# A PC: device type, a pointer standing in for touch (faketouch: the Play Store hides nearly every app
+# from a device without it), Ethernet, USB host, freeform windows.
 PRODUCT_COPY_FILES += \
     frameworks/native/data/etc/pc_core_hardware.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/pc_core_hardware.xml \
+    frameworks/native/data/etc/android.hardware.faketouch.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.hardware.faketouch.xml \
     frameworks/native/data/etc/android.hardware.ethernet.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.hardware.ethernet.xml \
     frameworks/native/data/etc/android.hardware.usb.host.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.hardware.usb.host.xml \
     frameworks/native/data/etc/android.software.freeform_window_management.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.software.freeform_window_management.xml
