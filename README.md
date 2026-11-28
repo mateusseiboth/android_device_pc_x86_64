@@ -51,19 +51,19 @@ two that live outside the Android tree).
 | Project | What it is |
 | --- | --- |
 | [PcInstaller](https://github.com/mateusseiboth/android_packages_apps_PcInstaller) | Installs the system from the live USB stick, and once installed it is **System updates**: updates and patches, from a file or online. |
-| [PcFiles](https://github.com/mateusseiboth/android_packages_apps_PcFiles) | **Files**, the file manager: tabs, side panel, trash, network shares, partitions mounted by Disks. |
+| [PcFiles](https://github.com/mateusseiboth/android_packages_apps_PcFiles) | **Files**, the file manager (it replaces the stock Files app; partitions mounted by Disks show there too). |
 | [PcTerminal](https://github.com/mateusseiboth/android_packages_apps_PcTerminal) | **Terminal** and Linux containers (Debian, Ubuntu, Fedora, Arch...), with its root service pc-containerd. |
 | [PcWayland](https://github.com/mateusseiboth/android_packages_apps_PcWayland) | Runs Linux apps as windows of their own (Wayland and X11 with GPU acceleration, sound). |
 | [PcPrint](https://github.com/mateusseiboth/android_packages_apps_PcPrint) | **Printers and scanners**: prints to network and USB printers without drivers, scans with eSCL scanners. |
 | [PcDisks](https://github.com/mateusseiboth/android_packages_apps_PcDisks) | **Disks**: partitions, mounting, formatting, labels and disk health. |
 | [PcRemote](https://github.com/mateusseiboth/android_packages_apps_PcRemote) | **Remote desktop**: lets another computer connect to this one by RDP, switched on in Settings. |
-| [PcClipboard](https://github.com/mateusseiboth/android_packages_apps_PcClipboard) | Clipboard history behind the status bar's clipboard button (texts and images). |
-| [PcTaskManager](https://github.com/mateusseiboth/android_packages_apps_PcTaskManager) | **Task manager**: apps, processes, CPU, memory, disks and network. |
-| [PcDiagnostics](https://github.com/mateusseiboth/android_packages_apps_PcDiagnostics) | **Diagnostics**: hardware details and checks (also the rows in Settings > About). |
-| [PcTextEditor](https://github.com/mateusseiboth/android_packages_apps_PcTextEditor) | **Text editor**. |
-| [PcViewer](https://github.com/mateusseiboth/android_packages_apps_PcViewer) | **Viewer** for images, PDFs and other documents. |
+| [PcClipboard](https://github.com/mateusseiboth/android_packages_apps_PcClipboard) | Clipboard history: texts, images and links copied recently, one click away in the status bar. |
+| [PcTaskManager](https://github.com/mateusseiboth/android_packages_apps_PcTaskManager) | **Task manager**: what is running, how much CPU and memory it uses, and a way to end an app. |
+| [PcDiagnostics](https://github.com/mateusseiboth/android_packages_apps_PcDiagnostics) | **Diagnostics**: live CPU, memory, storage, battery and network readings, and testers for the keyboard, touchpad, speakers, microphone and more. |
+| [PcTextEditor](https://github.com/mateusseiboth/android_packages_apps_PcTextEditor) | **Text editor** for plain text files. |
+| [PcViewer](https://github.com/mateusseiboth/android_packages_apps_PcViewer) | **Viewer**, the default app for images, SVG, PDFs, text, audio and video. |
 | [PcClocks](https://github.com/mateusseiboth/android_packages_apps_PcClocks) | Lock screen clock styles for the style picker. |
-| [PcLogin](https://github.com/mateusseiboth/android_packages_apps_PcLogin) | The login screen (one account per person on the computer). |
+| [PcLogin](https://github.com/mateusseiboth/android_packages_apps_PcLogin) | The login screen: the people who use the PC, each with their own PIN or password if they set one. |
 
 **Outside the Android tree**
 
