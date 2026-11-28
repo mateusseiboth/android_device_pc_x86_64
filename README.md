@@ -344,7 +344,7 @@ be set) and `vendor.pc.power.charge_limit_fixed` (the fixed cap, when that is al
 | `terminal/` | Linux terminal: KVM detection (`pc-hypervisor.sh`) and default permissions |
 | `bootlog/` | `pc-bootlog`, the boot animation that shows the live log |
 | `power/` | `android.hardware.power-service.pc`, the Power HAL (profiles, battery tuning, charge limit) |
-| `audio/`, `wifi/`, `camera/` | HAL configuration |
+| `audio/`, `wifi/`, `camera/` | HAL configuration; `wifi/pc-radios.sh` turns Wi-Fi back on when a laptop's Wi-Fi key lifts the radio's hardware block (Android does not follow rfkill) |
 | `sepolicy/` | vendor policy, and system_ext policy in `sepolicy/public` and `sepolicy/private` (SELinux is permissive while it is completed) |
 
 Tests: `python3 -m unittest` in `kernel/`, `initrd/`, `iso/`, `secureboot/`, `vulkan/`, `terminal/` and `bootlog/`; `secureboot/sb_boot_test.py` boots an ISO in QEMU.

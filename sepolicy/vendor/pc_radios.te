@@ -1,0 +1,12 @@
+# pc-radios.sh (wifi/): watches the Wi-Fi radios' rfkill state and turns Wi-Fi back on through the
+# framework's own shell commands (settings, cmd wifi), which the policy still leaves to permissive mode.
+type pc_radios, domain;
+type pc_radios_exec, exec_type, vendor_file_type, file_type;
+
+init_daemon_domain(pc_radios)
+
+allow pc_radios vendor_shell_exec:file rx_file_perms;
+allow pc_radios vendor_toolbox_exec:file rx_file_perms;
+
+# /sys/class/rfkill/rfkill*/{type,hard}.
+r_dir_file(pc_radios, sysfs)

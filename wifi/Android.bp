@@ -1,0 +1,6 @@
+// Wi-Fi: turns Wi-Fi back on when the laptop's Wi-Fi key turns the radio on (init.pc.rc).
+sh_binary {
+    name: "pc-radios.sh",
+    src: "pc-radios.sh",
+    vendor: true,
+}

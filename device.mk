@@ -163,6 +163,7 @@ PRODUCT_COPY_FILES += \
 # Wi-Fi (nl80211, no vendor HAL) and Bluetooth (HCI user channel on any controller).
 PRODUCT_PACKAGES += \
     wpa_supplicant \
+    pc-radios.sh \
     android.hardware.bluetooth-service.default
 PRODUCT_VENDOR_PROPERTIES += \
     wifi.interface=wlan0 \

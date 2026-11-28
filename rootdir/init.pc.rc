@@ -56,6 +56,16 @@ service wpa_supplicant /vendor/bin/hw/wpa_supplicant -O/data/vendor/wifi/wpa/soc
     oneshot
     disabled
 
+# Wi-Fi back on when the laptop's Wi-Fi key turns the radio on: Android does not follow rfkill, and
+# Wi-Fi turned on while the key had the radio off stayed off (wifi/pc-radios.sh).
+service pc-radios /vendor/bin/pc-radios.sh
+    user root
+    group root
+    disabled
+
+on property:sys.boot_completed=1
+    start pc-radios
+
 on post-fs-data
     mkdir /data/vendor/wifi 0770 wifi wifi
     mkdir /data/vendor/wifi/wpa 0770 wifi wifi
