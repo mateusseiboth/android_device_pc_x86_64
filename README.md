@@ -41,6 +41,55 @@ Forks: [minigbm](https://github.com/mateusseiboth/android_external_minigbm) keep
 [aospext](https://github.com/mateusseiboth/android_glodroid_aospext) builds radeonsi without LLVM and
 only pulls libva when VA is enabled.
 
+## Apps and projects
+
+Everything below is ours and open source (the repositories are listed in `local_manifest.xml`, except the
+two that live outside the Android tree).
+
+**Apps of the system**
+
+| Project | What it is |
+| --- | --- |
+| [PcInstaller](https://github.com/mateusseiboth/android_packages_apps_PcInstaller) | Installs the system from the live USB stick, and once installed it is **System updates**: updates and patches, from a file or online. |
+| [PcFiles](https://github.com/mateusseiboth/android_packages_apps_PcFiles) | **Files**, the file manager: tabs, side panel, trash, network shares, partitions mounted by Disks. |
+| [PcTerminal](https://github.com/mateusseiboth/android_packages_apps_PcTerminal) | **Terminal** and Linux containers (Debian, Ubuntu, Fedora, Arch...), with its root service pc-containerd. |
+| [PcWayland](https://github.com/mateusseiboth/android_packages_apps_PcWayland) | Runs Linux apps as windows of their own (Wayland and X11 with GPU acceleration, sound). |
+| [PcPrint](https://github.com/mateusseiboth/android_packages_apps_PcPrint) | **Printers and scanners**: prints to network and USB printers without drivers, scans with eSCL scanners. |
+| [PcDisks](https://github.com/mateusseiboth/android_packages_apps_PcDisks) | **Disks**: partitions, mounting, formatting, labels and disk health. |
+| [PcRemote](https://github.com/mateusseiboth/android_packages_apps_PcRemote) | **Remote desktop**: lets another computer connect to this one by RDP, switched on in Settings. |
+| [PcClipboard](https://github.com/mateusseiboth/android_packages_apps_PcClipboard) | Clipboard history behind the status bar's clipboard button (texts and images). |
+| [PcTaskManager](https://github.com/mateusseiboth/android_packages_apps_PcTaskManager) | **Task manager**: apps, processes, CPU, memory, disks and network. |
+| [PcDiagnostics](https://github.com/mateusseiboth/android_packages_apps_PcDiagnostics) | **Diagnostics**: hardware details and checks (also the rows in Settings > About). |
+| [PcTextEditor](https://github.com/mateusseiboth/android_packages_apps_PcTextEditor) | **Text editor**. |
+| [PcViewer](https://github.com/mateusseiboth/android_packages_apps_PcViewer) | **Viewer** for images, PDFs and other documents. |
+| [PcClocks](https://github.com/mateusseiboth/android_packages_apps_PcClocks) | Lock screen clock styles for the style picker. |
+| [PcLogin](https://github.com/mateusseiboth/android_packages_apps_PcLogin) | The login screen (one account per person on the computer). |
+
+**Outside the Android tree**
+
+| Project | What it is |
+| --- | --- |
+| [rdp-client-android](https://github.com/mateusseiboth/rdp-client-android) | A Remote Desktop (RDP) client for any Android, also published on its own. |
+| [lineage-pc-updates](https://github.com/mateusseiboth/lineage-pc-updates) | The update list the System updates app reads, with the changelog. |
+
+**Forks** (changes to LineageOS, AOSP and other projects, credited in each one)
+
+| Project | What it is |
+| --- | --- |
+| [frameworks/base](https://github.com/mateusseiboth/android_frameworks_base) | The desktop: status bar, notifications, windows, task bar (SystemUI and WM Shell). |
+| [Launcher3](https://github.com/mateusseiboth/android_packages_apps_Launcher3) | The desktop, app list and task bar. |
+| [vendor/pc/ui](https://github.com/mateusseiboth/android_vendor_pc_ui) | The desktop's overlays and feature flags. |
+| [Settings](https://github.com/mateusseiboth/android_packages_apps_Settings) | Settings for a computer (monitors, battery only when there is one, remote desktop). |
+| [SetupWizard](https://github.com/mateusseiboth/android_packages_apps_SetupWizard) | The first-boot setup. |
+| [frameworks/native](https://github.com/mateusseiboth/android_frameworks_native) | SurfaceFlinger with two screens: the built-in one paces the frames. |
+| [Connectivity](https://github.com/mateusseiboth/android_packages_modules_Connectivity) | Local network access for the Linux containers. |
+| [drm_hwcomposer](https://github.com/mateusseiboth/android_external_drm_hwcomposer) | Screen output on any GPU (opens every DRM card, smooth on two monitors). |
+| [minigbm](https://github.com/mateusseiboth/android_external_minigbm) | Graphics buffers for every GPU through Mesa (gbm_mesa). |
+| [aospext](https://github.com/mateusseiboth/android_glodroid_aospext) | Builds Mesa inside the Android build. |
+| [adb](https://github.com/mateusseiboth/android_packages_modules_adb) | adb root for the signed-in user. |
+| [logging](https://github.com/mateusseiboth/android_system_logging) | System apps read the logs without a consent dialog. |
+| [FreeRDP](https://github.com/mateusseiboth/FreeRDP) | FreeRDP, the RDP library behind the remote desktop and the RDP client. |
+
 ## Build
 
 ```sh

@@ -39,12 +39,17 @@
   <project path="packages/apps/PcTextEditor" name="android_packages_apps_PcTextEditor" remote="pc" revision="lineage-24.0" />
   <project path="packages/apps/PcViewer" name="android_packages_apps_PcViewer" remote="pc" revision="lineage-24.0" />
   <project path="packages/apps/PcFiles" name="android_packages_apps_PcFiles" remote="pc" revision="lineage-24.0" />
+  <project path="packages/apps/PcPrint" name="android_packages_apps_PcPrint" remote="pc" revision="lineage-24.0" />
+  <project path="packages/apps/PcDisks" name="android_packages_apps_PcDisks" remote="pc" revision="lineage-24.0" />
   <project path="packages/apps/PcClipboard" name="android_packages_apps_PcClipboard" remote="pc" revision="lineage-24.0" />
   <project path="packages/apps/PcLogin" name="android_packages_apps_PcLogin" remote="pc" revision="lineage-24.0" />
   <!-- Linux containers: the Terminal app and pc-containerd. -->
   <project path="packages/apps/PcTerminal" name="android_packages_apps_PcTerminal" remote="pc" revision="lineage-24.0" />
   <!-- Linux apps: the Wayland compositor, one Android window per Linux window. -->
   <project path="packages/apps/PcWayland" name="android_packages_apps_PcWayland" remote="pc" revision="lineage-24.0" />
+  <!-- Remote desktop: the RDP server behind Settings' switch, on FreeRDP's server library. -->
+  <project path="packages/apps/PcRemote" name="android_packages_apps_PcRemote" remote="pc" revision="lineage-24.0" />
+  <project path="external/freerdp" name="FreeRDP" remote="pc" revision="pc" />
   <remove-project name="LineageOS/android_packages_apps_SetupWizard" />
   <project path="packages/apps/SetupWizard" name="android_packages_apps_SetupWizard" remote="pc" revision="pc" />
 

@@ -14,7 +14,8 @@ class LocalManifestTest(unittest.TestCase):
     def test_every_fork_replaces_the_lineage_project(self):
         removed = {p.get("name") for p in MANIFEST.findall("remove-project")}
         for project in MANIFEST.findall("project"):
-            if project.get("revision") == "pc":
+            # Forks of LineageOS projects are android_*; a fork of an outside project (FreeRDP) adds one.
+            if project.get("revision") == "pc" and project.get("name").startswith("android_"):
                 with self.subTest(path=project.get("path")):
                     self.assertTrue(any(project.get("name") in name for name in removed))
 

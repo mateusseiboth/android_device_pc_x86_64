@@ -202,15 +202,19 @@ PRODUCT_PACKAGES += \
     PcWayland
 
 # Desktop apps: task manager, diagnostics (also Settings > About hardware rows), text editor, viewer,
-# Files (the file manager; DocumentsUI stays the system file picker), and the clipboard history behind
-# the status bar's clipboard button.
+# Files (the file manager; DocumentsUI stays the system file picker), the clipboard history behind
+# the status bar's clipboard button, Printers & scanners (driverless printing and eSCL scanning; its
+# print service replaces AOSP's built-in one) and Disks (partitions, mounting, formatting, health,
+# with its root service pc-disksd).
 PRODUCT_PACKAGES += \
     PcClipboard \
     PcTaskManager \
     PcDiagnostics \
     PcTextEditor \
     PcViewer \
-    PcFiles
+    PcFiles \
+    PcPrint \
+    PcDisks
 
 # ARM (arm64) apps through Google's libndk_translation native bridge. Proprietary, so it lives in the
 # local vendor/pc-ndk-local (never pushed): builds without it simply have no ARM translation.
